@@ -63,7 +63,7 @@ def graph_everything(final_shapes_list, title='Custom Tangram Puzzle Maker'):
 #    final_shapes_list = random_tilt_45_degrees(final_shapes_list)     Randomly tilt the shapes by 45 degrees sometimes for unpredictality
     for shape in final_shapes_list:
         coords = np.array(shape.coordinates)    # Get the exterior coordinates of the shape
-        shape = MplPolygon(coords, facecolor='black', edgecolor='red', alpha=0.7)
+        shape = MplPolygon(coords, facecolor='black', edgecolor='red', alpha=0.4)
         ax.add_patch(shape)
     ax.set_aspect('equal')    # Set equal aspect ratio so the shapes aren't distorted
     all_coords = np.vstack([np.array(shape.coordinates) for shape in final_shapes_list])
@@ -97,6 +97,30 @@ class Shape:
         self.free_side_lengths = free_side_lengths
         self.coordinates = coordinates
         self.polygon = Polygon(coordinates)  # Create a Shapely Polygon from the coordinates
+
+    def scale(self, x_factor, y_factor, origin='center'):
+        """
+        Scale the shape by given factors along x and y axes.
+
+        :param x_factor: Scaling factor along the x-axis.
+        :param y_factor: Scaling factor along the y-axis.
+        :param origin: Point (x, y) to scale around.
+        """
+        self.polygon = scale(self.polygon, xfact=x_factor, yfact=y_factor, origin='center')
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+    
+    def scaled(self, x_factor, y_factor, origin='center'):
+        """
+        Return a new scaled Shape by given factors along x and y axes.
+
+        :param x_factor: Scaling factor along the x-axis.
+        :param y_factor: Scaling factor along the y-axis.
+        :param origin: Point (x, y) to scale around.
+        :return: A new scaled Shape object.
+        """
+        scaled_polygon = scale(self.polygon, xfact=x_factor, yfact=y_factor, origin='center')
+        scaled_coordinates = list(scaled_polygon.exterior.coords)[:-1]  # Get new coordinates
+        return Shape(self.name, self.free_side_lengths, scaled_coordinates) 
 
     def rotate(self, angle, origin=(0, 0)):
         """
@@ -133,14 +157,20 @@ class Shape:
             raise ValueError("Axis must be 'x' or 'y'")
         self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
 
-    def overlaps(self, other_shape):
+    def overlaps(self, other_shape, tolerance=1.0):
         """
         Check if this shape overlaps with another shape.
 
         :param other_shape: Another Shape object.
         :return: True if the shapes overlap, False otherwise (This includes when one shape contains the other).
         """
-        return self.polygon.overlaps(other_shape.polygon)
+        if not isinstance(other_shape, Shape):
+            raise ValueError("Argument must be a Shape object.")
+        if tolerance > 1 or tolerance < 0:
+            raise ValueError("Tolerance must be between 0 and 1.")       
+         
+        tolerance_shape = other_shape.scaled(tolerance, tolerance, origin='center')
+        return self.polygon.overlaps(tolerance_shape.polygon)
 
     def contains(self, other):
         """
@@ -350,7 +380,7 @@ while len(shapes_list) != 0 and loop < 20:
                             print(f"Shape_to_place line segment2: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
                             print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
 
-                            if random_final_shape.contains(shape_to_place) or shape_to_place.contains(random_final_shape) or shape_to_place.overlaps(random_final_shape):
+                            if random_final_shape.contains(shape_to_place.scaled(.99, .99)) or shape_to_place.contains(random_final_shape.scaled(.99, .99)) or random_final_shape.overlaps(shape_to_place, .99):
                                 print("Shapes overlap or contain each other. Rotating 180.")
                                 print(f"Midpoint right before rotation: {midpoint}")
                                 shape_to_place.rotate(180, origin=(midpoint[0], midpoint[1]))
@@ -361,7 +391,7 @@ while len(shapes_list) != 0 and loop < 20:
 
                             overlap = False
                             for shape in final_shapes_list:
-                                if shape != random_final_shape and (shape_to_place.overlaps(shape) or shape_to_place.contains(shape)):
+                                if shape != random_final_shape and (shape.overlaps(shape_to_place, .999) or shape_to_place.contains(shape.scaled(.99, .99)) or shape.contains(shape_to_place.scaled(.99, .99))):
                                     print(f"{shape_to_place.name} overlaps with {shape.name}.")
                                     overlap = True
                                     break
@@ -407,5 +437,6 @@ while len(shapes_list) != 0 and loop < 20:
     else:
         print(f"Successfully placed shape: {shape_to_place.name}\n\n")
         shape_to_place = None
-
+if len(shapes_list) == 0:
+    print("All shapes placed successfully!")
 graph_everything(final_shapes_list)
