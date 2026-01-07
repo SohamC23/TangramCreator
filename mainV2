@@ -1,0 +1,340 @@
+import math
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon as MplPolygon
+from shapely import Point
+from shapely.geometry import Polygon
+from shapely.affinity import rotate, translate, scale
+from random import choice
+
+
+# New idea
+
+
+# These are my 10 shapes:
+# 1. Bigger Triangle (1 piece)
+# 2. Big Triangle (1 piece)
+# 3. Medium Triangle (1 piece)  
+# 4. Small Triangles (2 pieces)
+# 5. Square (1 piece)
+# 6. Parallelogram (1 piece)
+# 7. Large Parallelogram (1 piece)
+# 8. Rectangle (1 piece)
+# 9. Trapezoid (1 piece)
+
+# All the angles in the shapes are either 45 or 90 degrees or 135 degrees, so all the triangles are isosceles right triangles
+# Each shape is related to the other by its dimensions:
+# The small triangle is the smallest unit, and the other shapes can be made putting a bunch of those together
+
+# Suppose the small triangle has legs of length 1 unit which we'll call 'Length_A'
+LENGTH_A = 1
+# The Small Triangle has a Hypotnuse of LENGTH_A * sqrt(2), which is also the leg length of the Medium Triangle
+LENGTH_B = LENGTH_A * np.sqrt(2)
+# The Medium Triangle has a Hypotnuse of LENGTH_B * sqrt(2), which is also the leg length of the Big Triangle
+LENGTH_C = LENGTH_B * np.sqrt(2)
+# The Big Triangle has a Hypotnuse of LENGTH_C * sqrt(2), which is also the leg length of the Bigger Triangle
+LENGTH_D = LENGTH_C * np.sqrt(2)
+# The Big Triangle has a Hypotnuse of LENGTH_D * sqrt(2)
+LENGTH_E = LENGTH_D * np.sqrt(2)
+# The Square has sides of Length_A
+# The Parallelogram has sides of LENGTH_A and LENGTH_B
+# The Large Parallelogram has sides of LENGTH_B and LENGTH_C
+# The Rectangle has sides of LENGTH_A and LENGTH_C
+# The Trapezoid has sides of LENGTH_A, LENGTH_B, and 3 * LENGTH_A
+
+# Note that LENGTH_C = 2 * LENGTH_A, and LENGTH_D = 2 * LENGTH_B, that'll be important later.
+
+
+# The main Idea! I have is to join shapes that have common sides together, 
+# or to split longer sides into smaller lengths and have them share those sides with smaller shapes
+
+# The more sides that are shared between shapes, the harder it is to solve the tangram puzzle
+# So ideally, we want to maximize the number of shared sides between shapes
+
+# First, though, We'll just make the program so that it can place shapes to share sides and not overlap,
+# Later, we can work on optimizing the number of shared sides
+
+
+
+# this'll graph the shapes once we have them all placed
+def graph_everything(final_shapes_list, title='Custom Tangram Puzzle Maker'):
+    plt.rcParams['figure.figsize'] = [10, 8]    # Set the figure size for better visibility
+    fig, ax = plt.subplots()    # Create a figure and axis
+#    final_shapes_list = random_tilt_45_degrees(final_shapes_list)     Randomly tilt the shapes by 45 degrees sometimes for unpredictality
+    for shape in final_shapes_list:
+        coords = np.array(shape.coordinates)    # Get the exterior coordinates of the shape
+        shape = MplPolygon(coords, facecolor='black', edgecolor='red', alpha=.7)
+        ax.add_patch(shape)
+    ax.set_aspect('equal')    # Set equal aspect ratio so the shapes aren't distorted
+    all_coords = np.vstack([np.array(shape.coordinates) for shape in final_shapes_list])
+    xmin, ymin = all_coords.min(axis=0)
+    xmax, ymax = all_coords.max(axis=0)
+    ax.set_xlim(xmin-1, xmax+1)   # setting axis limits
+    ax.set_ylim(ymin-1, ymax+1)
+    ax.grid(False)    # Remove grid for better visibility
+    plt.title(title)
+    plt.show()
+
+# This sometimes tilts the final puzzle by 45 degrees for unpredictability
+def random_tilt_45_degrees(shapes):
+    if choice([True, False]):
+        for shape in shapes:
+            shape.rotate(45, origin=(0, 0))
+        return shapes
+    return shapes
+
+# defining the shapes class:
+class Shape:
+    def __init__(self, name, free_side_lengths, coordinates):
+        """
+        Initialize a Shape object.
+
+        :param name: Name of the shape (e.g., "Small Triangle", "Square").
+        :param free_side_lengths: List of free side lengths of the shape.
+        :param coordinates: List of (x, y) tuples representing the vertices of the shape.
+        """
+        self.name = name
+        self.free_side_lengths = free_side_lengths
+        self.coordinates = coordinates
+        self.polygon = Polygon(coordinates)  # Create a Shapely Polygon from the coordinates
+
+    def rotate(self, angle, origin=(0, 0)):
+        """
+        Rotate the shape by a given angle around a specified origin.
+
+        :param angle: Angle in degrees (counterclockwise).
+        :param origin: Point (x, y) to rotate around.
+        """
+        self.polygon = rotate(self.polygon, angle, origin=origin)
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def translate(self, x_offset, y_offset):
+        """
+        Translate the shape by a given offset.
+
+        :param x_offset: Offset along the x-axis.
+        :param y_offset: Offset along the y-axis.
+        """
+        self.polygon = translate(self.polygon, xoff=x_offset, yoff=y_offset)
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def reflect(self, axis='x', origin=(0, 0)):
+        """
+        Reflect the shape across a specified axis.
+
+        :param axis: The axis to reflect across ('x' or 'y').
+        :param origin: The point (x, y) to use as the reflection origin.
+        """
+        if axis == 'x':
+            self.polygon = scale(self.polygon, xfact=1, yfact=-1, origin=origin)
+        elif axis == 'y':
+            self.polygon = scale(self.polygon, xfact=-1, yfact=1, origin=origin)
+        else:
+            raise ValueError("Axis must be 'x' or 'y'")
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def overlaps(self, other_shape):
+        """
+        Check if this shape overlaps with another shape.
+
+        :param other_shape: Another Shape object.
+        :return: True if the shapes overlap, False otherwise (This includes when one shape contains the other).
+        """
+        return self.polygon.intersects(other_shape.polygon)
+
+    def contains(self, other):
+        """
+        Check if this shape completely contains another shape or a point.
+
+        :param other: Another Shape object or a tuple (x, y) representing a point.
+        :return: True if this shape contains the other shape or point, False otherwise.
+        """
+        if isinstance(other, Shape):
+            return self.polygon.contains(other.polygon)
+        elif isinstance(other, Point):
+            return self.polygon.contains(other)  # Directly use the Point object
+        elif isinstance(other, tuple) and len(other) == 2:
+            return self.polygon.contains(Point(other))
+        else:
+            raise ValueError("Argument must be a Shape object or a tuple representing a point.")
+
+    def __repr__(self):
+        """
+        String representation of the shape.
+        """
+        return f"Shape(name={self.name}, free_side_lengths={self.free_side_lengths}, coordinates={self.coordinates})"
+    
+# Define the 10 shapes
+shapes_list = [
+    # 1. Bigger Triangle
+    Shape(
+        name="Bigger Triangle",
+        free_side_lengths=[LENGTH_D, LENGTH_D, LENGTH_E],
+        coordinates=[(0, 0), (LENGTH_D, 0), (0, LENGTH_D)]
+    ),
+    # 2. Big Triangle
+    Shape(
+        name="Big Triangle",
+        free_side_lengths=[LENGTH_C, LENGTH_C, LENGTH_D],
+        coordinates=[(0, 0), (LENGTH_C, 0), (0, LENGTH_C)]
+    ),
+    # 3. Medium Triangle
+    Shape(
+        name="Medium Triangle",
+        free_side_lengths=[LENGTH_B, LENGTH_B, LENGTH_C],
+        coordinates=[(0, 0), (LENGTH_B, 0), (0, LENGTH_B)]
+    ),
+    # 4. Small Triangle 1
+    Shape(
+        name="Small Triangle 1",
+        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_B],
+        coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
+    ),
+    # 5. Small Triangle 2
+    Shape(
+        name="Small Triangle 2",
+        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_B],
+        coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
+    ),
+    # 6. Square
+    Shape(
+        name="Square",
+        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_A, LENGTH_A],
+        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_A), (0, LENGTH_A)]
+    ),
+    # 7. Parallelogram
+    Shape(
+        name="Parallelogram",
+        free_side_lengths=[LENGTH_A, LENGTH_B, LENGTH_A, LENGTH_B],
+        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (LENGTH_A, LENGTH_A)]
+    ),
+    # 8. Large Parallelogram
+    Shape(
+        name="Large Parallelogram",
+        free_side_lengths=[LENGTH_B, LENGTH_C, LENGTH_B, LENGTH_C],
+        coordinates=[(0, 0), (LENGTH_B, 0), (LENGTH_B + LENGTH_B, LENGTH_B), (LENGTH_B, LENGTH_B)]
+    ),
+    # 9. Rectangle
+    Shape(
+        name="Rectangle",
+        free_side_lengths=[LENGTH_A, LENGTH_C, LENGTH_A, LENGTH_C],
+        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_C), (0, LENGTH_C)]
+    ),
+    # 10. Trapezoid
+    Shape(
+        name="Trapezoid",
+        free_side_lengths=[LENGTH_A, LENGTH_B, 3 * LENGTH_A, LENGTH_B],
+        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (-LENGTH_A, LENGTH_A)]
+    )
+]
+
+final_shapes_list = []
+
+# first, We'll move one shape into the final shapes list to start with
+first_shape = choice(shapes_list)
+final_shapes_list.append(first_shape)
+shapes_list.remove(first_shape)
+
+# now, we choose a random shape that has a side that can be shared with one of the shapes in the final shapes list
+# and try to place it there without overlapping any of the other shapes in the final shapes list
+# and we repeat this until all shapes are placed
+loop = 0
+while len(shapes_list) != 0 and loop < 1000:
+    loop += 1
+    random_final_shape = choice(final_shapes_list)
+    print(loop, random_final_shape.name, len(shapes_list))
+    if len(random_final_shape.free_side_lengths) == 0:
+        continue
+    random_final_shape_side = choice(random_final_shape.free_side_lengths)
+    # find all shapes that have a side that can be shared with the random_final_shape_side
+    candidate_shapes = []
+    for shape in shapes_list:
+        for side in shape.free_side_lengths:
+            if side == random_final_shape_side:
+                candidate_shapes.append(shape)
+                break
+    if len(candidate_shapes) == 0:
+        continue
+    shape_to_place = choice(candidate_shapes)
+
+    # Next, we try to place the shape_to_place next to the random_final_shape
+    random_final_shape_coords = random_final_shape.coordinates
+    for coord in random_final_shape_coords:
+        x1, y1 = coord
+        x2, y2 = random_final_shape_coords[(random_final_shape_coords.index(coord) + 1) % len(random_final_shape_coords)]
+        # these two points make a line segment
+        if math.sqrt((x2 - x1)**2 + (y2 - y1)**2) == random_final_shape_side:
+            # this checks that the line segment is the right length
+            midpoint = ((x1 + x2) / 2, (y1 + y2) / 2)
+            point1 = (midpoint[0] + (y2 - y1)/(2 * random_final_shape_side), midpoint[1] + (x2 - x1)/(2 * random_final_shape_side))
+            point2 = (midpoint[0] - (y2 - y1)/(2 * random_final_shape_side), midpoint[1] - (x2 - x1)/(2 * random_final_shape_side))
+            # point 1 and point 2 are on either side of the line segment and can be used to check which side has shapes
+            place_shape = True
+            if random_final_shape.contains(point1):
+                for shape in final_shapes_list:
+                    if shape != random_final_shape and shape.contains(point2):
+                        place_shape = False
+            if random_final_shape.contains(point2):
+                for shape in final_shapes_list:
+                    if shape != random_final_shape and shape.contains(point1):
+                        place_shape = False
+            if place_shape:
+                # If we reach here, we can say the line segment to place the shape is good but 
+                # we still need to check if putting down the new piece will overlap any other pieces
+                for coord in shape_to_place.coordinates:
+                    x3, y3 = coord
+                    for i in range(len(shape_to_place.coordinates)):
+                        x3, y3 = shape_to_place.coordinates[i]
+                        x4, y4 = shape_to_place.coordinates[(i + 1) % len(shape_to_place.coordinates)]
+                    if math.sqrt((x4 - x3)**2 + (y4 - y3)**2) != random_final_shape_side:
+                        continue
+                    # by here, we have found a side of the shape_to_place that matches the random_final_shape_side
+                    # now we just need to align the two sides and check for overlaps
+                    # First, translate the shape_to_place so that one point aligns with the random_final_shape side point
+                    shape_to_place.translate(x1 - x3, y1 - y3)
+                    # Next, rotate the shape_to_place so that its side aligns with the random_final_shape side
+                    for rotation in range(2):    # tries both sides of the shape (The shape might need to be flipped)
+                        angle1 = math.atan2(y2 - y1, x2 - x1)
+                        angle2 = math.atan2(y4 - y3, x4 - x3)
+                        rotation_angle = math.degrees(angle1 - angle2)
+                        shape_to_place.rotate(rotation_angle, origin=(x1, y1))
+                        # Now, we check that it's facing the right way (not overlapping the random_final_shape)
+                        if random_final_shape.contains(shape_to_place) or shape_to_place.contains(random_final_shape) or shape_to_place.overlaps(random_final_shape):
+                            shape_to_place.reflect(axis='y', origin=(midpoint[0], midpoint[1]))
+                            shape_to_place.reflect(axis='x', origin=(midpoint[0], midpoint[1]))
+
+                        # Lastly, we check for overlaps with all other shapes in the final shapes list
+                        overlap = False
+                        for shape in final_shapes_list:
+                            if shape != random_final_shape and shape_to_place.overlaps(shape):
+                                overlap = True
+                                break
+                        
+                        # Now, we can finally place the shape
+                        if not overlap:
+                            final_shapes_list.append(shape_to_place)
+                            shapes_list.remove(shape_to_place)
+                            random_final_shape.free_side_lengths.remove(random_final_shape_side)
+                            shape_to_place.free_side_lengths.remove(random_final_shape_side)
+                            break
+                        else:
+                            # we flip the shape for the next loop
+                            shape_to_place_side_angle = math.atan2(y4 - y3, x4 - x3)
+                            shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(x1, y1))
+                            new_midpoint = ((x3 + x4) / 2, (y3 + y4) / 2)
+                            shape_to_place.reflect(axis='y', origin=(new_midpoint[0], new_midpoint[1]))
+                            shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(x1, y1))
+                            tempx3 = x3
+                            tempy3 = y3
+                            x3 = x4
+                            y3 = y4
+                            x4 = tempx3
+                            y4 = tempy3
+                    if shape_to_place in final_shapes_list:
+                        break
+
+    # if we reach here, we couldn't place the shape, so we try again with a new random_final_shape
+
+
+
+graph_everything(final_shapes_list)
