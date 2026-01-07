@@ -63,7 +63,7 @@ def graph_everything(final_shapes_list, title='Custom Tangram Puzzle Maker'):
 #    final_shapes_list = random_tilt_45_degrees(final_shapes_list)     Randomly tilt the shapes by 45 degrees sometimes for unpredictality
     for shape in final_shapes_list:
         coords = np.array(shape.coordinates)    # Get the exterior coordinates of the shape
-        shape = MplPolygon(coords, facecolor='black', edgecolor='red', alpha=.7)
+        shape = MplPolygon(coords, facecolor='black', edgecolor='red', alpha=0.7)
         ax.add_patch(shape)
     ax.set_aspect('equal')    # Set equal aspect ratio so the shapes aren't distorted
     all_coords = np.vstack([np.array(shape.coordinates) for shape in final_shapes_list])
@@ -230,8 +230,11 @@ shapes_list = [
 
 final_shapes_list = []
 
+# Debugging print statements added throughout the code
+
 # first, We'll move one shape into the final shapes list to start with
 first_shape = choice(shapes_list)
+print(f"First shape chosen: {first_shape.name}")
 final_shapes_list.append(first_shape)
 shapes_list.remove(first_shape)
 
@@ -239,13 +242,22 @@ shapes_list.remove(first_shape)
 # and try to place it there without overlapping any of the other shapes in the final shapes list
 # and we repeat this until all shapes are placed
 loop = 0
-while len(shapes_list) != 0 and loop < 1000:
+while len(shapes_list) != 0 and loop < 10:
     loop += 1
+    print(f"\n--- Loop {loop} ---")
+    print(f"Remaining shapes: {[shape.name for shape in shapes_list]}")
+    print(f"Final shapes: {[shape.name for shape in final_shapes_list]}")
+
     random_final_shape = choice(final_shapes_list)
-    print(loop, random_final_shape.name, len(shapes_list))
+    print(f"Random final shape chosen: {random_final_shape.name}")
+    
     if len(random_final_shape.free_side_lengths) == 0:
+        print(f"{random_final_shape.name} has no free sides. Skipping.")
         continue
+
     random_final_shape_side = choice(random_final_shape.free_side_lengths)
+    print(f"Random side length chosen: {random_final_shape_side}")
+
     # find all shapes that have a side that can be shared with the random_final_shape_side
     candidate_shapes = []
     for shape in shapes_list:
@@ -253,88 +265,125 @@ while len(shapes_list) != 0 and loop < 1000:
             if side == random_final_shape_side:
                 candidate_shapes.append(shape)
                 break
+    print(f"Candidate shapes: {[shape.name for shape in candidate_shapes]}")
+
     if len(candidate_shapes) == 0:
+        print("No candidate shapes found. Skipping.")
         continue
-    shape_to_place = choice(candidate_shapes)
+
 
     # Next, we try to place the shape_to_place next to the random_final_shape
-    random_final_shape_coords = random_final_shape.coordinates
-    for coord in random_final_shape_coords:
-        x1, y1 = coord
-        x2, y2 = random_final_shape_coords[(random_final_shape_coords.index(coord) + 1) % len(random_final_shape_coords)]
+
+    successfully_placed_shape = False
+    for i in range(len(random_final_shape.coordinates)):
+        x1, y1 = random_final_shape.coordinates[i]
+        x2, y2 = random_final_shape.coordinates[(i + 1) % len(random_final_shape.coordinates)]
+        print(f"Random_final_shape line segment: ({x1}, {y1}) to ({x2}, {y2})")
+
         # these two points make a line segment
         if math.sqrt((x2 - x1)**2 + (y2 - y1)**2) == random_final_shape_side:
-            # this checks that the line segment is the right length
+            print("Line segment matches the chosen side length.")
             midpoint = ((x1 + x2) / 2, (y1 + y2) / 2)
-            point1 = (midpoint[0] + (y2 - y1)/(2 * random_final_shape_side), midpoint[1] + (x2 - x1)/(2 * random_final_shape_side))
-            point2 = (midpoint[0] - (y2 - y1)/(2 * random_final_shape_side), midpoint[1] - (x2 - x1)/(2 * random_final_shape_side))
-            # point 1 and point 2 are on either side of the line segment and can be used to check which side has shapes
+            print(f"Midpoint: {midpoint}")
+
+            point1 = (midpoint[0] + (y2 - y1)/(10), midpoint[1] - (x2 - x1)/(10))
+            point2 = (midpoint[0] - (y2 - y1)/(10), midpoint[1] + (x2 - x1)/(10))
+            print(f"Point1: {point1}, Point2: {point2}")
+
             place_shape = True
             if random_final_shape.contains(point1):
+                print(f"{random_final_shape.name} contains Point1.")
                 for shape in final_shapes_list:
                     if shape != random_final_shape and shape.contains(point2):
+                        print(f"{shape.name} contains Point2. Cannot place shape.")
                         place_shape = False
+
             if random_final_shape.contains(point2):
+                print(f"{random_final_shape.name} contains Point2.")
                 for shape in final_shapes_list:
                     if shape != random_final_shape and shape.contains(point1):
+                        print(f"{shape.name} contains Point1. Cannot place shape.")
                         place_shape = False
+
             if place_shape:
-                # If we reach here, we can say the line segment to place the shape is good but 
-                # we still need to check if putting down the new piece will overlap any other pieces
-                for coord in shape_to_place.coordinates:
-                    x3, y3 = coord
+                print("Line segment is valid for placement.")
+                for shape in candidate_shapes:
+                    shape_to_place = shape
+                    print(f"Shape to place: {shape_to_place.name}")
                     for i in range(len(shape_to_place.coordinates)):
                         x3, y3 = shape_to_place.coordinates[i]
                         x4, y4 = shape_to_place.coordinates[(i + 1) % len(shape_to_place.coordinates)]
-                    if math.sqrt((x4 - x3)**2 + (y4 - y3)**2) != random_final_shape_side:
-                        continue
-                    # by here, we have found a side of the shape_to_place that matches the random_final_shape_side
-                    # now we just need to align the two sides and check for overlaps
-                    # First, translate the shape_to_place so that one point aligns with the random_final_shape side point
-                    shape_to_place.translate(x1 - x3, y1 - y3)
-                    # Next, rotate the shape_to_place so that its side aligns with the random_final_shape side
-                    for rotation in range(2):    # tries both sides of the shape (The shape might need to be flipped)
-                        angle1 = math.atan2(y2 - y1, x2 - x1)
-                        angle2 = math.atan2(y4 - y3, x4 - x3)
-                        rotation_angle = math.degrees(angle1 - angle2)
-                        shape_to_place.rotate(rotation_angle, origin=(x1, y1))
-                        # Now, we check that it's facing the right way (not overlapping the random_final_shape)
-                        if random_final_shape.contains(shape_to_place) or shape_to_place.contains(random_final_shape) or shape_to_place.overlaps(random_final_shape):
-                            shape_to_place.reflect(axis='y', origin=(midpoint[0], midpoint[1]))
-                            shape_to_place.reflect(axis='x', origin=(midpoint[0], midpoint[1]))
+                        print(f"Shape_to_place line segment: ({x3}, {y3}) to ({x4}, {y4})")
 
-                        # Lastly, we check for overlaps with all other shapes in the final shapes list
-                        overlap = False
-                        for shape in final_shapes_list:
-                            if shape != random_final_shape and shape_to_place.overlaps(shape):
-                                overlap = True
+                        if math.sqrt((x4 - x3)**2 + (y4 - y3)**2) != random_final_shape_side:
+                            print("Line segment does not match the chosen side length. Skipping.")
+                            continue
+
+                        print("Line segment matches. Aligning shapes.")
+                        shape_to_place.translate(x1 - x3, y1 - y3)
+                        print(f"Translated shape_to_place to: {shape_to_place.coordinates}")
+                        print(f"Random final shape coordinates: {random_final_shape.coordinates}")
+
+                        for rotation in range(2):  # tries both sides of the shape
+                            print(f"Trying rotation {rotation}.")
+                            angle1 = math.atan2(y2 - y1, x2 - x1)   # angle of the final shape side segment
+                            angle2 = math.atan2(y4 - y3, x4 - x3)   # angle of the shape to place side segment
+                            print(f"Angle1: {math.degrees(angle1)}, Angle2: {math.degrees(angle2)}")
+                            rotation_angle = math.degrees(angle1 - angle2)
+                            print(f"Rotation angle: {rotation_angle}")
+                            shape_to_place.rotate(rotation_angle, origin=(x1, y1))
+                            print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
+
+                            if random_final_shape.contains(shape_to_place) or shape_to_place.contains(random_final_shape) or shape_to_place.overlaps(random_final_shape):
+                                print("Shapes overlap or contain each other. Rotating 180.")
+                                print(f"Midpoint right before rotation: {midpoint}")
+                                shape_to_place.rotate(180, origin=(midpoint[0], midpoint[1]))
+                                print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
+
+                            overlap = False
+                            for shape in final_shapes_list:
+                                if shape != random_final_shape and shape_to_place.overlaps(shape):
+                                    print(f"{shape_to_place.name} overlaps with {shape.name}.")
+                                    overlap = True
+                                    break
+
+                            if not overlap:
+                                print(f"Placing shape: {shape_to_place.name}")
+                                final_shapes_list.append(shape_to_place)
+                                shapes_list.remove(shape_to_place)
+                                random_final_shape.free_side_lengths.remove(random_final_shape_side)
+                                shape_to_place.free_side_lengths.remove(random_final_shape_side)
+                                successfully_placed_shape = True
                                 break
-                        
-                        # Now, we can finally place the shape
-                        if not overlap:
-                            final_shapes_list.append(shape_to_place)
-                            shapes_list.remove(shape_to_place)
-                            random_final_shape.free_side_lengths.remove(random_final_shape_side)
-                            shape_to_place.free_side_lengths.remove(random_final_shape_side)
+                            else:
+                                print("Overlap detected. Flipping shape.")
+                                print(f"Coordinates before flipping: {shape_to_place.coordinates}")
+                                shape_to_place_side_angle = math.atan2(y4 - y3, x4 - x3)
+                                shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(x1, y1))
+                                new_midpoint = ((x3 + x4) / 2, (y3 + y4) / 2)
+                                shape_to_place.reflect(axis='y', origin=(new_midpoint[0], new_midpoint[1]))
+                                shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(x1, y1))
+                                tempx3 = x3
+                                tempy3 = y3
+                                x3 = x4
+                                y3 = y4
+                                x4 = tempx3
+                                y4 = tempy3
+                                print(f"new midpoint during flipping: {new_midpoint}")
+                                print(f"Coordinates after flipping: {shape_to_place.coordinates}")
+
+                        if successfully_placed_shape:
+                            print("hit 1")
                             break
-                        else:
-                            # we flip the shape for the next loop
-                            shape_to_place_side_angle = math.atan2(y4 - y3, x4 - x3)
-                            shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(x1, y1))
-                            new_midpoint = ((x3 + x4) / 2, (y3 + y4) / 2)
-                            shape_to_place.reflect(axis='y', origin=(new_midpoint[0], new_midpoint[1]))
-                            shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(x1, y1))
-                            tempx3 = x3
-                            tempy3 = y3
-                            x3 = x4
-                            y3 = y4
-                            x4 = tempx3
-                            y4 = tempy3
-                    if shape_to_place in final_shapes_list:
+                    if successfully_placed_shape:
+                        print("hit 2")
                         break
-
-    # if we reach here, we couldn't place the shape, so we try again with a new random_final_shape
-
-
+        if successfully_placed_shape:
+            print("hit 3")
+            break
+    if shape_to_place not in final_shapes_list:
+        print("Could not place shape. Trying again with a new random_final_shape.\n\n\n")
+    else:
+        print(f"Successfully placed shape: {shape_to_place.name}\n\n")
 
 graph_everything(final_shapes_list)
