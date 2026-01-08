@@ -5,7 +5,7 @@ from matplotlib.patches import Polygon as MplPolygon
 from shapely import Point
 from shapely.geometry import Polygon
 from shapely.affinity import rotate, translate, scale
-from random import choice
+from random import choice, shuffle
 
 
 # New idea
@@ -80,16 +80,14 @@ def graph_everything(final_shapes_list, alpha, border, title, loops):
 
 # defining the shapes class:
 class Shape:
-    def __init__(self, name, free_side_lengths, coordinates):
+    def __init__(self, name, coordinates):
         """
         Initialize a Shape object.
 
         :param name: Name of the shape (e.g., "Small Triangle", "Square").
-        :param free_side_lengths: List of free side lengths of the shape.
         :param coordinates: List of (x, y) tuples representing the vertices of the shape.
         """
         self.name = name
-        self.free_side_lengths = free_side_lengths
         self.coordinates = coordinates
         self.polygon = Polygon(coordinates)  # Create a Shapely Polygon from the coordinates
 
@@ -115,7 +113,7 @@ class Shape:
         """
         scaled_polygon = scale(self.polygon, xfact=x_factor, yfact=y_factor, origin='center')
         scaled_coordinates = list(scaled_polygon.exterior.coords)[:-1]  # Get new coordinates
-        return Shape(self.name, self.free_side_lengths, scaled_coordinates) 
+        return Shape(self.name, scaled_coordinates) 
 
     def rotate(self, angle, origin=(0, 0)):
         """
@@ -187,7 +185,7 @@ class Shape:
         """
         String representation of the shape.
         """
-        return f"Shape(name={self.name}, free_side_lengths={self.free_side_lengths}, coordinates={self.coordinates})"
+        return f"Shape(name={self.name}, coordinates={self.coordinates})"
     
 # Define the 10 shapes
 
@@ -201,61 +199,51 @@ shapes_list = [
     # 1. Bigger Triangle
     Shape(
         name="Bigger Triangle",
-        free_side_lengths=[LENGTH_D, LENGTH_D, LENGTH_E],
         coordinates=[(0, 0), (LENGTH_D, 0), (0, LENGTH_D)]
     ),
     # 2. Big Triangle
     Shape(
         name="Big Triangle",
-        free_side_lengths=[LENGTH_C, LENGTH_C, LENGTH_D],
         coordinates=[(0, 0), (LENGTH_C, 0), (0, LENGTH_C)]
     ),
     # 3. Medium Triangle
     Shape(
         name="Medium Triangle",
-        free_side_lengths=[LENGTH_B, LENGTH_B, LENGTH_C],
         coordinates=[(0, 0), (LENGTH_B, 0), (0, LENGTH_B)]
     ),
     # 4. Small Triangle 1
     Shape(
         name="Small Triangle 1",
-        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_B],
         coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
     ),
     # 5. Small Triangle 2
     Shape(
         name="Small Triangle 2",
-        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_B],
         coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
     ),
     # 6. Square
     Shape(
         name="Square",
-        free_side_lengths=[LENGTH_A, LENGTH_A, LENGTH_A, LENGTH_A],
         coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_A), (0, LENGTH_A)]
     ),
     # 7. Parallelogram
     Shape(
         name="Parallelogram",
-        free_side_lengths=[LENGTH_A, LENGTH_B, LENGTH_A, LENGTH_B],
         coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (LENGTH_A, LENGTH_A)]
     ),
     # 8. Large Parallelogram
     Shape(
         name="Large Parallelogram",
-        free_side_lengths=[LENGTH_B, LENGTH_C, LENGTH_B, LENGTH_C],
         coordinates=[(0, 0), (LENGTH_B, 0), (LENGTH_B + LENGTH_B, LENGTH_B), (LENGTH_B, LENGTH_B)]
     ),
     # 9. Rectangle
     Shape(
         name="Rectangle",
-        free_side_lengths=[LENGTH_A, LENGTH_C, LENGTH_A, LENGTH_C],
         coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_C), (0, LENGTH_C)]
     ),
     # 10. Trapezoid
     Shape(
         name="Trapezoid",
-        free_side_lengths=[LENGTH_A, LENGTH_B, 3 * LENGTH_A, LENGTH_B],
         coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (-LENGTH_A, LENGTH_A)]
     )
 ]
@@ -287,201 +275,184 @@ while len(shapes_list) != 0 and loop < 10000:
     # Here, I want to use the combined shape to help guide where to place the next shape
     # first, I need to find a convex angle on the combined shape to work with,
     # if there are no convex angles, I'll let the algorithm run as normal without that guidance
-    combined_shape_convex_points = []
-    print(f"Combined shape points: {list(combined_shape.exterior.coords)}")
-    for combined_shape_point in list(combined_shape.exterior.coords):
-        print(f"Combined shape point: {combined_shape_point}")
-        Point_A = Point(combined_shape_point)
-        index = list(combined_shape.exterior.coords).index(combined_shape_point)
-        Point_B = Point(list(combined_shape.exterior.coords)[(index + 1) % (len(list(combined_shape.exterior.coords)) - 1)]) # the -1 is because the last point is the same as the first point
-        Point_C = Point(list(combined_shape.exterior.coords)[(index + 2) % (len(list(combined_shape.exterior.coords)) - 1)])
-        if combined_shape.contains(Point((Point_A.x + Point_C.x) / 2, (Point_A.y + Point_C.y) / 2)):
-            print("Found concave angle, continuing to next point.")
-            continue  # this is a concave angle, so we skip it
-        angleBA = math.atan2(Point_B.y - Point_A.y, Point_B.x - Point_A.x)   # angle of the final shape side segment
-        angleBC = math.atan2(Point_B.y - Point_C.y, Point_B.x - Point_C.x)   # angle of the shape to place side segment
-        print(f"AngleBA: {math.degrees(angleBA)}, AngleBC: {math.degrees(angleBC)}")
-        convex_angle = abs(math.degrees(angleBA - angleBC))
-        if convex_angle > 180:
-            convex_angle = 360 - convex_angle
-        print(f"angle at combined shape point: {convex_angle}")
-        combined_shape_convex_points.append((Point_B, round(convex_angle, 1)))
-    
-    print(f"Combined shape convex points: {combined_shape_convex_points}")
+    if successfully_placed_shape:
+        combined_shape_convex_points = []
+        print(f"Combined shape points: {list(combined_shape.exterior.coords)[:-1]}")
+        for combined_shape_point in list(combined_shape.exterior.coords)[:-1]:
+            print(f"Combined shape point: {combined_shape_point}")
+            Point_A = Point(combined_shape_point)
+            index = list(combined_shape.exterior.coords).index(combined_shape_point)
+            Point_B = Point(list(combined_shape.exterior.coords)[(index + 1) % (len(list(combined_shape.exterior.coords)) - 1)]) # the -1 is because the last point is the same as the first point
+            Point_C = Point(list(combined_shape.exterior.coords)[(index + 2) % (len(list(combined_shape.exterior.coords)) - 1)])
+            if combined_shape.contains(Point((Point_A.x + Point_C.x) / 2, (Point_A.y + Point_C.y) / 2)):
+                print("Found concave angle, continuing to next point.")
+                continue  # this is a concave angle, so we skip it
+            angleBA = math.atan2(Point_B.y - Point_A.y, Point_B.x - Point_A.x)   # angle of the final shape side segment
+            angleBC = math.atan2(Point_B.y - Point_C.y, Point_B.x - Point_C.x)   # angle of the shape to place side segment
+            print(f"AngleBA: {math.degrees(angleBA)}, AngleBC: {math.degrees(angleBC)}")
+            convex_angle = round(abs(math.degrees(angleBA - angleBC)))
+            if convex_angle > 180:
+                convex_angle = 360 - convex_angle
+            print(f"angle at combined shape point: {convex_angle}")
+            if (convex_angle == 45) or (convex_angle == 90) or (convex_angle == 135):
+                print(f"Using convex point with angle {convex_angle} degrees: {Point_A, Point_B, Point_C}")
+                combined_shape_convex_points.append((Point_A, Point_B, Point_C, Point_B.distance(Point_A), Point_B.distance(Point_C), convex_angle))
+
+        print(f"Combined shape convex points: {combined_shape_convex_points}")
 
     if len(combined_shape_convex_points) == 0:
         # no convex points found, proceed as normal
         print("No convex points found on combined shape.")
-        random_final_shape = choice(final_shapes_list)
-        print(f"Random final shape chosen: {random_final_shape.name}")
-        if len(random_final_shape.free_side_lengths) == 0:
-            print(f"{random_final_shape.name} has no free sides. Skipping.")
-            continue
-        random_final_shape_side = choice(random_final_shape.free_side_lengths)
-        print(f"Random side length chosen: {random_final_shape_side}")
+        coords_to_use = list(combined_shape.exterior.coords)[:-1]
+        print(f"Using combined shape coordinates: {coords_to_use}")
+        line_segments_to_use = []
+        for i in range(len(coords_to_use)):
+            x1, y1 = coords_to_use[i]
+            x2, y2 = coords_to_use[(i + 1) % len(coords_to_use)]
+            line_segments_to_use.append(((x1, y1), (x2, y2)))
     else:
-        # choose a random convex point to work with and find a side length to work with
-        a
-
-
-    # find all shapes that have a side that can be shared with the random_final_shape_side
-    candidate_shapes = []
-    for shape in shapes_list:
-        for side in shape.free_side_lengths:
-            if round(side, 4) == round(random_final_shape_side, 4):
-                candidate_shapes.append(shape)
-                break
-    print(f"Candidate shapes: {[shape.name for shape in candidate_shapes]}")
-
-    if len(candidate_shapes) == 0:
-        print("No candidate shapes found. Skipping.")
-        continue
-
+        line_segments_to_use = []
+        for convex_point in combined_shape_convex_points:
+            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[0].x, convex_point[0].y), convex_point[5], convex_point[4]))  # side length from Point_B to Point_C, its twin
+            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[2].x, convex_point[2].y), convex_point[5], convex_point[3])) # side length from Point_B to Point_A, its twin
 
     # Next, we try to place the shape_to_place next to the random_final_shape
 
     successfully_placed_shape = False
-    for i in range(len(random_final_shape.coordinates)):
-        x1, y1 = random_final_shape.coordinates[i]
-        x2, y2 = random_final_shape.coordinates[(i + 1) % len(random_final_shape.coordinates)]
+    for i in range(len(line_segments_to_use)):
+        x1, y1 = line_segments_to_use[i][0]
+        x2, y2 = line_segments_to_use[i][1]
         point1 = Point(x1, y1)
         point2 = Point(x2, y2)
-        print(f"Random_final_shape line segment: ({x1}, {y1}) to ({x2}, {y2})")
-
+        combined_shape_side_midpoint = Point((point1.x + point2.x) / 2, (point1.y + point2.y) / 2)
+        print(f"Combined shape side midpoint: {combined_shape_side_midpoint}")
         # these two points make a line segment
-        if round(point1.distance(point2), 4) == round(random_final_shape_side, 4):
-            print("Line segment matches the chosen side length.")
-            midpoint = ((point1.x + point2.x) / 2, (point1.y + point2.y) / 2)
-            print(f"Midpoint: {midpoint}")
+        print(f"Trying line segment: ({point1.x}, {point1.y}) to ({point2.x}, {point2.y})")
+        combined_shape_side_length = point1.distance(point2)
+        print(f"Combined shape side length: {combined_shape_side_length}")
 
-            # these two points are perpendicular to the line segment and slightly offset from the midpoint
-            # they help check if the side length isn't already touching another shape
-            face_check_point1 = (midpoint[0] + (point2.y - point1.y)/(10), midpoint[1] - (point2.x - point1.x)/(10))
-            face_check_point2 = (midpoint[0] - (point2.y - point1.y)/(10), midpoint[1] + (point2.x - point1.x)/(10))
-            print(f"face_check_point1: {face_check_point1}, face_check_point2: {face_check_point2}")
+        candidate_shapes = []
+        if len(combined_shape_convex_points) != 0:
+            convex_point_angle = line_segments_to_use[i][2]
+            print(f"Using convex point angle for matching: {convex_point_angle} degrees")
+            convex_point_twin_side_length = line_segments_to_use[i][3]
+            print(f"Using convex point twin side length for matching: {convex_point_twin_side_length}")
 
-            place_shape = True
-            if random_final_shape.contains(face_check_point1):
-                print(f"{random_final_shape.name} contains face_check_point1.")
-                for shape in final_shapes_list:
-                    if shape != random_final_shape and shape.contains(face_check_point2):
-                        print(f"{shape.name} contains face_check_point2. Cannot place shape.")
-                        place_shape = False
 
-            if random_final_shape.contains(face_check_point2):
-                print(f"{random_final_shape.name} contains face_check_point2.")
-                for shape in final_shapes_list:
-                    if shape != random_final_shape and shape.contains(face_check_point1):
-                        print(f"{shape.name} contains face_check_point1. Cannot place shape.")
-                        place_shape = False
 
-            if place_shape:
-                print("Line segment is valid for placement.")
-                # next, we try to place each candidate shape on this line segment
-                for shape in candidate_shapes:
-                    shape_to_place = shape
-                    print(f"Shape to place: {shape_to_place.name}")
-                    for i in range(len(shape_to_place.coordinates)):
-                        x3, y3 = shape_to_place.coordinates[i]
-                        x4, y4 = shape_to_place.coordinates[(i + 1) % len(shape_to_place.coordinates)]
-                        point3 = Point(x3, y3)
-                        point4 = Point(x4, y4)
-                        print(f"Shape_to_place line segment0: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                        print(f"Shape_to_place coordinates: {shape_to_place.coordinates}")
 
-                        if round(point3.distance(point4), 4) != round(random_final_shape_side, 4):
-                            print("Line segment does not match the chosen side length. Skipping.")
-                            continue
 
-                        # this translates the shape_to_place so that its line segment shares one point with the random_final_shape line segment
-                        print("Line segment matches. Aligning shapes.")
-                        print(f"Translating shape_to_place by ({point1.x - point3.x}, {point1.y - point3.y})")
-                        xtranslate = point1.x - point3.x
-                        ytranslate = point1.y - point3.y
-                        shape_to_place.translate(xtranslate, ytranslate)
-                        point3 = translate(point3, xoff=xtranslate, yoff=ytranslate)
-                        point4 = translate(point4, xoff=xtranslate, yoff=ytranslate)
-                        print(f"Shape_to_place line segment1: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                        print(f"Translated shape_to_place to: {shape_to_place.coordinates}")
-                        print(f"Random final shape coordinates: {random_final_shape.coordinates}")
 
-                        for rotation in range(2):  # tries both sides of the shape
-                            print(f"Trying rotation {rotation}.")
-                            # this rotates the shape_to_place so that its line segment is now aligned with the random_final_shape line segment
-                            angle1 = math.atan2(point2.y - point1.y, point2.x - point1.x)   # angle of the final shape side segment
-                            angle2 = math.atan2(point4.y - point3.y, point4.x - point3.x)   # angle of the shape to place side segment
-                            print(f"Angle1: {math.degrees(angle1)}, Angle2: {math.degrees(angle2)}")
-                            rotation_angle = math.degrees(angle1 - angle2)
-                            print(f"Rotation angle: {rotation_angle}")
-                            xRotateOrigin = point1.x
-                            yRotateOrigin = point1.y
-                            shape_to_place.rotate(rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
-                            point3 = rotate(point3, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
-                            point4 = rotate(point4, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
-                            print(f"Shape_to_place line segment2: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                            print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
 
-                            # check if the the shape_to_place is facing the wrong way (aka towards the random_final_shape)
-                            if random_final_shape.contains(shape_to_place.scaled(.99, .99)) or shape_to_place.contains(random_final_shape.scaled(.99, .99)) or random_final_shape.overlaps(shape_to_place, .99):
-                                print("Shapes overlap or contain each other. Rotating 180.")
-                                print(f"Midpoint right before rotation: {midpoint}")
-                                shape_to_place.rotate(180, origin=(midpoint[0], midpoint[1]))
-                                point3 = rotate(point3, 180, origin=(midpoint[0], midpoint[1]))
-                                point4 = rotate(point4, 180, origin=(midpoint[0], midpoint[1]))
-                                print(f"Shape_to_place line segment3: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                                print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
+        else:
+            candidate_shapes = shuffle(shapes_list)
+            print("No convex point angle, using all shapes as candidates.")
 
-                            # This checks if the shape_to_place overlaps with any of the shapes in the final_shapes_list
-                            overlap = False
-                            for shape in final_shapes_list:
-                                if shape != random_final_shape and (shape.overlaps(shape_to_place, .98) or shape_to_place.contains(shape.scaled(.99, .99)) or shape.contains(shape_to_place.scaled(.99, .99))):
-                                    print(f"{shape_to_place.name} overlaps with {shape.name}.")
-                                    overlap = True
-                                    break
+        # next, we try to place each remaining shape on this line segment till one works
+        for shape_to_place in candidate_shapes:
+            print(f"Shape to place: {shape_to_place.name}")
+            for i in range(len(shape_to_place.coordinates)):
+                x3, y3 = shape_to_place.coordinates[i]
+                x4, y4 = shape_to_place.coordinates[(i + 1) % len(shape_to_place.coordinates)]
+                point3 = Point(x3, y3)
+                point4 = Point(x4, y4)
+                shape_to_place_side_midpoint = Point((point3.x + point4.x) / 2, (point3.y + point4.y) / 2)
+                print(f"Midpoint: {shape_to_place_side_midpoint}")
+                print(f"Shape_to_place line segment0: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                print(f"Shape_to_place coordinates: {shape_to_place.coordinates}")
 
-                            # if all conditions are satisfied, we place the shape_to_place
-                            if not overlap:
-                                print(f"Placing shape: {shape_to_place.name}")
-                                # this removes the used side lengths from the list of free side lengths for both shapes
-                                random_final_shape.free_side_lengths.remove(random_final_shape_side)
-                                shape_to_place.free_side_lengths.remove(random_final_shape_side)
-                                # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
-                                final_shapes_list.append(shape_to_place)
-                                shapes_list.remove(shape_to_place)
+                # this makes sure we don't try to place a shape with a longer side than the combined shape side
+                if round(point3.distance(point4), 4) > round(combined_shape_side_length, 4):
+                    print("shape side length too long. Skipping.")
+                    continue
+                
+                # this makes sure the combined_shape_side_length is divisable by the shape_to_place line segment
+                if round(combined_shape_side_length, 1) % round(point3.distance(point4), 1) != 0:
+                    print("shape side length does not divide combined shape side length. Skipping.")
+                    continue
 
-                                print(f"Combined shape before union: {combined_shape}")
-                                print(f"Shape to place (scaled): {shape_to_place.scaled(1.01, 1.01).polygon}")
-                                combined_shape = combined_shape.union(shape_to_place.scaled(1.01, 1.01).polygon)
-                                print(f"Combined shape after union: {combined_shape}")
+                # this translates the shape_to_place so that its line segment shares one point with the random_final_shape line segment
+                print("Line segment matches. Aligning shapes.")
+                print(f"Translating shape_to_place by ({point1.x - point3.x}, {point1.y - point3.y})")
+                xtranslate = point1.x - point3.x
+                ytranslate = point1.y - point3.y
+                shape_to_place.translate(xtranslate, ytranslate)
+                point3 = translate(point3, xoff=xtranslate, yoff=ytranslate)
+                point4 = translate(point4, xoff=xtranslate, yoff=ytranslate)
+                shape_to_place_side_midpoint = translate(shape_to_place_side_midpoint, xoff=xtranslate, yoff=ytranslate)
+                print(f"Shape_to_place line segment1: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                print(f"Translated shape_to_place to: {shape_to_place.coordinates}")
 
-                                successfully_placed_shape = True
-                                break
-                            else:
-                                # if it overlaps, we try flipping the shape_to_place along the aligned line segment
-                                print("Overlap detected. Flipping shape.")
-                                print(f"Coordinates before flipping: {shape_to_place.coordinates}")
-                                print(f"Midpoint before flipping: {midpoint}")
-                                print(f"Line segment to flip around: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                                shape_to_place_side_angle = math.atan2(point4.y - point3.y, point4.x - point3.x)
-                                print(f"Shape to place side angle: {math.degrees(shape_to_place_side_angle)}")
-                                shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(midpoint[0], midpoint[1]))
-                                print(f"Coordinates after rotating to 0 degrees: {shape_to_place.coordinates}")
-                                shape_to_place.reflect(axis='y', origin=(midpoint[0], midpoint[1]))
-                                print(f"Coordinates after reflection: {shape_to_place.coordinates}")
-                                shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(midpoint[0], midpoint[1]))
-                                print(f"Coordinates after rotating back: {shape_to_place.coordinates}")
-                                tempPoint = point3
-                                point3 = point4
-                                point4 = tempPoint
-                                print(f"Swapped line segment points to: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
-                                print(f"Coordinates after flipping: {shape_to_place.coordinates}")
+                for rotation in range(2):  # tries both sides of the shape
+                    print(f"Trying rotation {rotation}.")
+                    # this rotates the shape_to_place so that its line segment is now aligned with the random_final_shape line segment
+                    angle1 = math.atan2(point2.y - point1.y, point2.x - point1.x)   # angle of the final shape side segment
+                    angle2 = math.atan2(point4.y - point3.y, point4.x - point3.x)   # angle of the shape to place side segment
+                    print(f"Angle1: {math.degrees(angle1)}, Angle2: {math.degrees(angle2)}")
+                    rotation_angle = math.degrees(angle1 - angle2)
+                    print(f"Rotation angle: {rotation_angle}")
+                    xRotateOrigin = point1.x
+                    yRotateOrigin = point1.y
+                    shape_to_place.rotate(rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                    point3 = rotate(point3, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                    point4 = rotate(point4, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                    shape_to_place_side_midpoint = rotate(shape_to_place_side_midpoint, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                    print(f"Shape_to_place line segment2: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                    print(f"Rotated shape_to_place_side_midpoint to: ({shape_to_place_side_midpoint.x}, {shape_to_place_side_midpoint.y})")
+                    print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
 
-                        if successfully_placed_shape:
-                            print("hit 1")
-                            break
-                    if successfully_placed_shape:
-                        print("hit 2")
+                    # check if the the shape_to_place is facing the wrong way (aka towards the random_final_shape)
+                    if combined_shape.contains(shape_to_place.scaled(.98, .98)) or shape_to_place.contains(combined_shape.scaled(.98, .98)) or combined_shape.overlaps(shape_to_place, .98):
+                        print("Shapes overlap or contain each other. Rotating 180.")
+                        print(f"Midpoint right before rotation: {midpoint}")
+                        shape_to_place.rotate(180, origin=(midpoint[0], midpoint[1]))
+                        point3 = rotate(point3, 180, origin=(midpoint[0], midpoint[1]))
+                        point4 = rotate(point4, 180, origin=(midpoint[0], midpoint[1]))
+                        print(f"Shape_to_place line segment3: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                        print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
+
+
+
+                    # if all conditions are satisfied, we place the shape_to_place
+                    if not overlap:
+                        print(f"Placing shape: {shape_to_place.name}")
+                        # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
+                        final_shapes_list.append(shape_to_place)
+                        shapes_list.remove(shape_to_place)
+
+                        print(f"Combined shape before union: {combined_shape}")
+                        print(f"Shape to place (scaled): {shape_to_place.scaled(1.01, 1.01).polygon}")
+                        combined_shape = combined_shape.union(shape_to_place.scaled(1.01, 1.01).polygon)
+                        print(f"Combined shape after union: {combined_shape}")
+
+                        successfully_placed_shape = True
                         break
+                    else:
+                        # if it overlaps, we try flipping the shape_to_place along the aligned line segment
+                        print("Overlap detected. Flipping shape.")
+                        print(f"Coordinates before flipping: {shape_to_place.coordinates}")
+                        print(f"Midpoint before flipping: {midpoint}")
+                        print(f"Line segment to flip around: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                        shape_to_place_side_angle = math.atan2(point4.y - point3.y, point4.x - point3.x)
+                        print(f"Shape to place side angle: {math.degrees(shape_to_place_side_angle)}")
+                        shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(midpoint[0], midpoint[1]))
+                        print(f"Coordinates after rotating to 0 degrees: {shape_to_place.coordinates}")
+                        shape_to_place.reflect(axis='y', origin=(midpoint[0], midpoint[1]))
+                        print(f"Coordinates after reflection: {shape_to_place.coordinates}")
+                        shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(midpoint[0], midpoint[1]))
+                        print(f"Coordinates after rotating back: {shape_to_place.coordinates}")
+                        tempPoint = point3
+                        point3 = point4
+                        point4 = tempPoint
+                        print(f"Swapped line segment points to: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                        print(f"Coordinates after flipping: {shape_to_place.coordinates}")
+
+                if successfully_placed_shape:
+                    print("hit 1")
+                    break
+            if successfully_placed_shape:
+                print("hit 2")
+                break
         if successfully_placed_shape:
             print("hit 3")
             break
