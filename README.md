@@ -55,4 +55,4 @@ LinkedIn: [soham-chouhan](https://www.linkedin.com/in/soham-chouhan/)
 
 ## License
 
-This project can use the same Apache-2.0 license style as the Connect_4 repository
+This project uses the GNU GENERAL PUBLIC LICENSE v3.0
