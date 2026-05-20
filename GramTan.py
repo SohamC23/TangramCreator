@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
 from shapely.geometry import Polygon, Point, MultiPolygon
 from shapely.affinity import rotate, translate, scale
-from random import choice
+from shapely.ops import snap
+from random import choice, shuffle
 import copy
 
 
@@ -29,13 +30,13 @@ import copy
 # Suppose the small triangle has legs of length 1 unit which we'll call 'Length_A'
 LENGTH_A = 1
 # The Small Triangle has a Hypotnuse of LENGTH_A * sqrt(2), which is also the leg length of the Medium Triangle
-LENGTH_B = LENGTH_A * np.sqrt(2)
+LENGTH_B = LENGTH_A * round(np.sqrt(2), 5)
 # The Medium Triangle has a Hypotnuse of LENGTH_B * sqrt(2), which is also the leg length of the Big Triangle
-LENGTH_C = LENGTH_B * np.sqrt(2)
+LENGTH_C = LENGTH_B * round(np.sqrt(2), 5)
 # The Big Triangle has a Hypotnuse of LENGTH_C * sqrt(2), which is also the leg length of the Bigger Triangle
-LENGTH_D = LENGTH_C * np.sqrt(2)
+LENGTH_D = LENGTH_C * round(np.sqrt(2), 5)
 # The Big Triangle has a Hypotnuse of LENGTH_D * sqrt(2)
-LENGTH_E = LENGTH_D * np.sqrt(2)
+LENGTH_E = LENGTH_D * round(np.sqrt(2), 5)
 # The Square has sides of Length_A
 # The Parallelogram has sides of LENGTH_A and LENGTH_B
 # The Large Parallelogram has sides of LENGTH_B and LENGTH_C
@@ -63,7 +64,7 @@ def graph_everything(final_shapes_list, alpha, border, title, loops):
     ax.set_facecolor('#204652')  # Change the plot area background color
     fig.patch.set_facecolor('#204652')  # Change the entire figure background color
     for shape in final_shapes_list:
-        coords = np.array(shape.coordinates)    # Get the exterior coordinates of the shape
+        coords = shape.coordinates    # Get the exterior coordinates of the shape
         shape = MplPolygon(coords, facecolor='black', edgecolor=border, alpha=alpha, linewidth=1)
         ax.add_patch(shape)
     ax.set_aspect('equal')    # Set equal aspect ratio so the shapes aren't distorted
@@ -161,7 +162,7 @@ class Shape:
             raise ValueError("Argument must be a Shape object.")
         if tolerance > 1 or tolerance < 0:
             raise ValueError("Tolerance must be between 0 and 1.")       
-         
+        
         tolerance_shape = other_shape.scaled(tolerance, tolerance, origin='center')
         return self.polygon.overlaps(tolerance_shape.polygon)
 
@@ -199,12 +200,12 @@ shapes_list = [
     # 1. Bigger Triangle
     Shape(
         name="Bigger Triangle",
-        coordinates=[(0, 0), (LENGTH_D, 0), (0, LENGTH_D)]
+        coordinates=[(0, 0), (2 * LENGTH_B, 0), (0, 2 * LENGTH_B)]
     ),
     # 2. Big Triangle
     Shape(
         name="Big Triangle",
-        coordinates=[(0, 0), (LENGTH_C, 0), (0, LENGTH_C)]
+        coordinates=[(0, 0), (2 * LENGTH_A, 0), (0, 2 * LENGTH_A)]
     ),
     # 3. Medium Triangle
     Shape(
@@ -279,11 +280,11 @@ while len(shapes_list) != 0 and loop < 50:
     combined_shape_convex_points = []
     print(f"Combined shape points: {list(combined_shape.exterior.coords)[:-1]}")
     for combined_shape_point in list(combined_shape.exterior.coords)[:-1]:
-        print(f"Combined shape point: {combined_shape_point}")
         Point_A = Point(combined_shape_point)
         index = list(combined_shape.exterior.coords).index(combined_shape_point)
         Point_B = Point(list(combined_shape.exterior.coords)[(index + 1) % (len(list(combined_shape.exterior.coords)) - 1)]) # the -1 is because the last point is the same as the first point
         Point_C = Point(list(combined_shape.exterior.coords)[(index + 2) % (len(list(combined_shape.exterior.coords)) - 1)])
+        print(f"Combined shape point: {Point_B}")
         if Point_A.distance(Point_B) < .01 or Point_B.distance(Point_C) < .01:
             print("convex angle caused by slight translation disparity")
             continue
@@ -317,11 +318,8 @@ while len(shapes_list) != 0 and loop < 50:
         for convex_point in combined_shape_convex_points:
             line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[0].x, convex_point[0].y), convex_point[5], convex_point[4]))  # side length from Point_B to Point_C, its twin
             line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[2].x, convex_point[2].y), convex_point[5], convex_point[3])) # side length from Point_B to Point_A, its twin
-
-        for convex_point in combined_shape_convex_points:
-            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[0].x, convex_point[0].y), convex_point[5], convex_point[4]))  # side length from Point_B to Point_C, its twin
-            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[2].x, convex_point[2].y), convex_point[5], convex_point[3])) # side length from Point_B to Point_A, its twin
-
+        line_segments_to_use.extend(line_segments_to_use)
+        
         coords_to_use = list(combined_shape.exterior.coords)[:-1]
         print(f"Using combined shape coordinates: {coords_to_use}")
         for coords_to_use_index in range(len(coords_to_use)):
@@ -332,11 +330,13 @@ while len(shapes_list) != 0 and loop < 50:
 
     # Next, we try to place the shape_to_place next to the random_final_shape
     num_of_convex_points = len(combined_shape_convex_points)
+    print("highest_tier_candidate_shape_achieved reset", num_of_convex_points)
     highest_tier_candidate_shape_achieved = 0
 
     successfully_placed_shape = False
     for line_segments_to_use_index in range(len(line_segments_to_use)):
         num_of_convex_points -= 1
+        print("num_of_convex_points now at:", num_of_convex_points)
         x1, y1 = line_segments_to_use[line_segments_to_use_index][0]
         x2, y2 = line_segments_to_use[line_segments_to_use_index][1]
         point1 = Point(x1, y1)
@@ -349,6 +349,7 @@ while len(shapes_list) != 0 and loop < 50:
         print(f"Combined shape side length: {combined_shape_side_length}")
 
         candidate_shapes = []
+        shuffle(shapes_list)
 
         if len(line_segments_to_use[line_segments_to_use_index]) > 2:
             print(f"Using combined shape side length: {combined_shape_side_length} for filtering candidate shapes.")
@@ -369,11 +370,15 @@ while len(shapes_list) != 0 and loop < 50:
                     shape_pointA = shape_coord
                     shape_pointB = shape.coordinates[(index + 1) % len(shape.coordinates)]
                     shape_pointC = shape.coordinates[(index + 2) % len(shape.coordinates)]
+                    print(f"tier shape coords: {shape_pointA, shape_pointB, shape_pointC}")
                     shape_angleBA = math.atan2(shape_pointB[1] - shape_pointA[1], shape_pointB[0] - shape_pointA[0])   # angle of the final shape side segment
                     shape_angleBC = math.atan2(shape_pointB[1] - shape_pointC[1], shape_pointB[0] - shape_pointC[0])   # angle of the shape to place side segment
-                    shape_angle = round(abs(math.degrees(shape_angleBA - shape_angleBC)))
+                    print(f"shape angleBA and BC: {math.degrees(shape_angleBA), math.degrees(shape_angleBC)}")
+                    shape_angle = round(abs(math.degrees(shape_angleBA - shape_angleBC) % 180))
+                    print(f"shape angle: {shape_angle}")
                     shape_distanceAB = ((shape_pointA[0] - shape_pointB[0]) ** 2 + (shape_pointA[1] - shape_pointB[1]) ** 2) ** 0.5
                     shape_distanceBC = ((shape_pointA[0] - shape_pointC[0]) ** 2 + (shape_pointA[1] - shape_pointC[1]) ** 2) ** 0.5
+                    print(f"shape_distanceAB and shape_distanceBC: {shape_distanceAB, shape_distanceBC}")
                     if shape_angle == convex_point_angle:
                         if shape not in tier1_candidate_shapes:
                             tier1_candidate_shapes.append(shape)
@@ -434,7 +439,8 @@ while len(shapes_list) != 0 and loop < 50:
             print("No convex point angle, using all shapes as candidates.", candidate_shapes)
 
         # next, we try to place each remaining shape on this line segment till one works
-        for shape_to_place in candidate_shapes:
+        for original_shape in candidate_shapes:
+            shape_to_place = copy.deepcopy(original_shape)
             print(shape_to_place, "23", shape_to_place.coordinates)
             for shape_to_place_coordinates_index in range(len(shape_to_place.coordinates)):
                 x3, y3 = shape_to_place.coordinates[shape_to_place_coordinates_index]
@@ -609,26 +615,36 @@ while len(shapes_list) != 0 and loop < 50:
                             highest_tier_candidate_shape_achieved = 2.5
                         elif shape_to_place in tier1_candidate_shapes and highest_tier_candidate_shape_achieved < 2.5:
                             highest_tier_candidate_shape_achieved = 1
+                        print(f"shape_to_place: {shape_to_place}")
+                        print(tier4_candidate_shapes)
+                        print(tier3_candidate_shapes)
+                        print(tier2_candidate_shapes)
+                        print(tier1_candidate_shapes)
+                        print(f"highest_tier_candidate_shape_achieved: {highest_tier_candidate_shape_achieved}")
                     else:
                         if (highest_tier_candidate_shape_achieved == 4 and shape_to_place in tier4_candidate_shapes) or (highest_tier_candidate_shape_achieved == 2.5 and (shape_to_place in tier3_candidate_shapes or shape_to_place in tier2_candidate_shapes)) or (highest_tier_candidate_shape_achieved == 1 and shape_to_place in tier1_candidate_shapes) or (highest_tier_candidate_shape_achieved == 0):
+                            # updating the combined shape
+                            print(f"Combined shape before union: {combined_shape}")
+                            print(f"Shape to place (not scaled): {shape_to_place.scaled(1.0, 1.0).polygon}")
+                            print(f"Shape to place (scaled): {shape_to_place.scaled(1.01, 1.01).polygon}")
+                            combined_shape = (combined_shape.buffer(1e-8).union(shape_to_place.polygon.buffer(1e-8)).buffer(-1e-8))
+                            combined_shape = combined_shape.buffer(0)
+                            combined_shape = snap(combined_shape, combined_shape, 1e-3)
+                            combined_shape = combined_shape.simplify(1e-3, preserve_topology=True)
+
+                            print(f"Combined shape after union: {combined_shape}")
+                            successfully_placed_shape = True
+                            if isinstance(combined_shape, MultiPolygon):
+                                graph_everything(final_shapes_list, .4, 'black', 'Could not place all shapes, something went wrong', loop)
+                            # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
                             print(f"Placing shape: {shape_to_place.name}")
                             print(f"final shapes list: {final_shapes_list}")
                             print(f"shapes list: {shapes_list}")
-                            # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
                             for shape in shapes_list:
                                 if shape_to_place.name == shape.name:
                                     shapes_list.remove(shape)
                                     break
                             final_shapes_list.append(shape_to_place)
-                            # updating the combined shape
-                            print(f"Combined shape before union: {combined_shape}")
-                            print(f"Shape to place (not scaled): {shape_to_place.scaled(1.0, 1.0).polygon}")
-                            print(f"Shape to place (scaled): {shape_to_place.scaled(1.0001, 1.0001).polygon}")
-                            combined_shape = combined_shape.union(shape_to_place.scaled(1.001, 1.001).polygon)
-                            print(f"Combined shape after union: {combined_shape}")
-                            successfully_placed_shape = True
-                            if isinstance(combined_shape, MultiPolygon):
-                                graph_everything(final_shapes_list, .4, 'black', 'Could not place all shapes, something went wrong', loop)
                             break
 
             if successfully_placed_shape:
@@ -644,10 +660,12 @@ while len(shapes_list) != 0 and loop < 50:
         shape_to_place = None
 if len(shapes_list) == 0:
     print("All shapes placed successfully!")
-    graph_everything(final_shapes_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
+    final_combined_shape_list = []
+    final_combined_shape_list.append(combined_shape)
+    graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
     graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
 else:
     print("Could not place all shapes, something went wrong. Try again")
     print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
-    graph_everything(final_shapes_list, 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
+    graph_everything([combined_shape], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
     graph_everything(final_shapes_list, 0.9, 'red', f"Shapes remaining: {[shape.name for shape in shapes_list]}", loop)
