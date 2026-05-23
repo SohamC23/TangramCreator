@@ -1,690 +1,63 @@
 import math
-from random import choice
-from random import shuffle
-import gramtan_checks
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
+from shapely.geometry import Polygon, Point, MultiPolygon
+from shapely.affinity import rotate, translate, scale
+from shapely.ops import snap
+from random import choice, shuffle
+import copy
 
 
-# defining the shapes class:
+# New idea
 
-"""
----------------------------------------------------------------------------------------------------
-IMPORTANT NOTE: the coordinates of the shape must be listed in clockwise order or stuff will break.
----------------------------------------------------------------------------------------------------
-"""
-class Shape:
-    def __init__(self, name, coordinates):
-        """
-        Initialize a Shape object.
 
-        :param name: Name of the shape (e.g., "Small Triangle", "Square").
-        :param coordinates: List of (x, y) tuples representing the vertices of the shape.
-        """
-        self.name = name
-        # Store coordinates as mutable lists so translate/rotate/reflect can modify them in place.
-        self.coordinates = [list(coord) for coord in coordinates]
+# These are my 10 shapes:
+# 1. Bigger Triangle (1 piece)
+# 2. Big Triangle (1 piece)
+# 3. Medium Triangle (1 piece)  
+# 4. Small Triangles (2 pieces)
+# 5. Square (1 piece)
+# 6. Parallelogram (1 piece)
+# 7. Large Parallelogram (1 piece)
+# 8. Rectangle (1 piece)
+# 9. Trapezoid (1 piece)
 
-    def rotate(self, angle, origin=(0, 0)):
-        """
-        Rotate the shape by a given angle around a specified origin.
+# All the angles in the shapes are either 45 or 90 degrees or 135 degrees, so all the triangles are isosceles right triangles
+# Each shape is related to the other by its dimensions:
+# The small triangle is the smallest unit, and the other shapes can be made putting a bunch of those together
 
-        :param angle: Angle in degrees (counterclockwise).
-        :param origin: Point (x, y) to rotate around. Defaults to origin
-        """
-        radians = math.radians(angle)
-        self.translate(-origin[0], -origin[1])
-        for coord in self.coordinates:
-            x_shifted = coord[0]
-            y_shifted = coord[1]
-            coord[0] = round(x_shifted * math.cos(radians) - y_shifted * math.sin(radians), 7)
-            coord[1] = round(x_shifted * math.sin(radians) + y_shifted * math.cos(radians), 7)
-        self.translate(origin[0], origin[1])
+# Suppose the small triangle has legs of length 1 unit which we'll call 'Length_A'
+LENGTH_A = 1
+# The Small Triangle has a Hypotnuse of LENGTH_A * sqrt(2), which is also the leg length of the Medium Triangle
+LENGTH_B = LENGTH_A * round(np.sqrt(2), 5)
+# The Medium Triangle has a Hypotnuse of LENGTH_B * sqrt(2), which is also the leg length of the Big Triangle
+LENGTH_C = LENGTH_B * round(np.sqrt(2), 5)
+# The Big Triangle has a Hypotnuse of LENGTH_C * sqrt(2), which is also the leg length of the Bigger Triangle
+LENGTH_D = LENGTH_C * round(np.sqrt(2), 5)
+# The Big Triangle has a Hypotnuse of LENGTH_D * sqrt(2)
+LENGTH_E = LENGTH_D * round(np.sqrt(2), 5)
+# The Square has sides of Length_A
+# The Parallelogram has sides of LENGTH_A and LENGTH_B
+# The Large Parallelogram has sides of LENGTH_B and LENGTH_C
+# The Rectangle has sides of LENGTH_A and LENGTH_C
+# The Trapezoid has sides of LENGTH_A, LENGTH_B, and 3 * LENGTH_A
 
-    def translate(self, x_offset, y_offset):
-        """
-        Translate the shape by a given offset.
+# Note that LENGTH_C = 2 * LENGTH_A, and LENGTH_D = 2 * LENGTH_B, that'll be important later.
 
-        :param x_offset: Offset along the x-axis.
-        :param y_offset: Offset along the y-axis.
-        """
-        for coord in self.coordinates:
-            coord[0] += x_offset
-            coord[1] += y_offset
 
-    def reflect(self, axis='x', origin=(0, 0)):
-        """
-        Reflect the shape across a specified axis.
+# The main Idea! I have is to join shapes that have common sides together, 
+# or to split longer sides into smaller lengths and have them share those sides with smaller shapes
 
-        :param axis: The axis to reflect across ('x' or 'y').
-        :param origin: The point (x, y) to use as the reflection origin. 
-        The shape is reflected so that the two lines connected to this point switch places
-        """
-        for coord in self.coordinates:
-            if axis == 'x':
-                coord[1] = 2 * origin[1] - coord[1]
-            elif axis == 'y':
-                coord[0] = 2 * origin[0] - coord[0]
-            else:
-                raise ValueError("Axis must be 'x' or 'y'")
+# The more sides that are shared between shapes, the harder it is to solve the tangram puzzle
+# So ideally, we want to maximize the number of shared sides between shapes
 
-    def __repr__(self):
-        """
-        String representation of the shape.
-        """
-        return f"Shape(name={self.name}, coordinates={self.coordinates})"
+# First, though, We'll just make the program so that it can place shapes to share sides and not overlap,
+# Later, we can work on optimizing the number of shared sides
 
 
-def reflect_shape_across_angle(shape: Shape, coordinate):
-    # 1. Find index of the vertex
-    try:
-        idx = shape.coordinates.index(coordinate)
-    except ValueError:
-        raise ValueError("Coordinate must be a vertex of the shape")
 
-    cx, cy = coordinate
-    px, py = shape.coordinates[(idx - 1) % len(shape.coordinates)]
-    nx, ny = shape.coordinates[(idx + 1) % len(shape.coordinates)]
-
-    # 2. Compute edge vectors (prev→current and next→current)
-    v1 = (px - cx, py - cy)
-    v2 = (nx - cx, ny - cy)
-
-    # Helper: normalize a 2D vector
-    def normalize(v):
-        x, y = v
-        mag = math.sqrt(x*x + y*y)
-        if mag == 0:
-            return (0.0, 0.0)
-        return (x/mag, y/mag)
-
-    v1 = normalize(v1)
-    v2 = normalize(v2)
-
-    # 3. Compute interior bisector
-    bisector = normalize((v1[0] + v2[0], v1[1] + v2[1]))
-
-    # If degenerate (straight line), use perpendicular
-    if abs(bisector[0]) < 1e-9 and abs(bisector[1]) < 1e-9:
-        bisector = normalize((v1[1], -v1[0]))
-
-    # 4. Angle of bisector relative to +x axis
-    angle = math.degrees(math.atan2(bisector[1], bisector[0]))
-
-    # 5. Rotate shape so bisector aligns with +x axis
-    shape.rotate(-angle, origin=coordinate)
-
-    # 6. Reflect across x-axis
-    shape.reflect(axis='x', origin=coordinate)
-
-    # 7. Rotate back
-    shape.rotate(angle, origin=coordinate)
-
-
-def check_point_on_line(point, line_start, line_end):
-    # Check if the point is on the line segment defined by line_start and line_end
-    cross_product = (point[1] - line_start[1]) * (line_end[0] - line_start[0]) - (point[0] - line_start[0]) * (line_end[1] - line_start[1])
-    if abs(cross_product) > 1e-5:
-        return False  # Not collinear
-
-    if (point[0] < min(line_start[0], line_end[0]) or point[0] > max(line_start[0], line_end[0]) or
-        point[1] < min(line_start[1], line_end[1]) or point[1] > max(line_start[1], line_end[1])):
-        return False  # Point is outside the bounding box of the segment
-
-    return True
-
-
-def check_lines_align_and_touch(line1_start, line1_end, line2_start, line2_end):
-    # Check if the lines are collinear
-    cross_product = (line1_end[1] - line1_start[1]) * (line2_end[0] - line2_start[0]) - (line1_end[0] - line1_start[0]) * (line2_end[1] - line2_start[1])
-    if abs(cross_product) > 1e-6:
-        return False  # Lines are not collinear
-
-    # Check if the lines touch each other
-    if (check_point_on_line(line1_start, line2_start, line2_end) or
-        check_point_on_line(line1_end, line2_start, line2_end) or
-        check_point_on_line(line2_start, line1_start, line1_end) or
-        check_point_on_line(line2_end, line1_start, line1_end)):
-        return True  # Lines touch each other
-
-    return False  # Lines are collinear but do not touch each other
-
-
-def join_shapes(combinedShape : Shape, shapeToAdd : Shape) -> Shape:
-    """
-    IMPORTANT NOTE: 
-    This function assumes that the shapes have already been moved into place next to each other to be joined.
-    It adds shapeToAdd to combinedShape, and returns the updated combinedShape. 
-    It also checks that the shapes are in a valid position to be joined together, and raises an error if they are not.
-    A valid poisition is one where at least one point and at least part of an edge of shapeToAdd is touching combinedShape, but the shapes are not overlapping each other.
-    If adding shapeToAdd would cause there to be a hole in combinedShape, then the function won't break, but it won't realize that either, missing out on potencial convex angles
-    """
-
-    if gramtan_checks.check_contains(combinedShape, shapeToAdd):
-        raise ValueError("Shapes cannot overlap")
-    
-    # this part makes it so that the shapes original coordinates are not affected by the joining process
-    combinedShape_coords = [list(coord) for coord in combinedShape.coordinates]
-    shapeToAdd_coords = [list(coord) for coord in shapeToAdd.coordinates]
-    """
-    1. we find iterate through the points and edges of combinedShape, and find a point from shapeToAdd that lies on combinedShape
-    2. we add the coordinate to the combinedShape coordinates list, unless it's already there beacause its a shared point
-    3. we iterate through the rest of ShapeToAdd's coordinates and keep inserting the next coordinate into the combinedShape coordinates list, 
-    until all the next coordinates and edges of shapeToAdd (up to the the first point added) lie on combinedShape,
-    at which point we stop because the rest of shapeToAdd is already accounted for in combinedShape
-    """
-
-    doneAddingShapeToAdd = False
-    for i in range(0, len(combinedShape_coords)): # iterate through the points and edges of combinedShape
-        for j in range(0, len(shapeToAdd_coords)): # find a point from shapeToAdd that lies on combinedShape to start from
-            if check_lines_align_and_touch(combinedShape_coords[i], combinedShape_coords[(i + 1) % len(combinedShape_coords)], shapeToAdd_coords[j], shapeToAdd_coords[(j + 1) % len(shapeToAdd_coords)]):
-                startIteratingThroughShapeToAdd = True
-                for k in range(0, len(combinedShape_coords)):
-                    if check_lines_align_and_touch(combinedShape_coords[k], combinedShape_coords[(k + 1) % len(combinedShape_coords)], shapeToAdd_coords[(j + 1) % len(shapeToAdd_coords)], shapeToAdd_coords[(j + 2) % len(shapeToAdd_coords)]):
-                        startIteratingThroughShapeToAdd = False
-                        break
-                if startIteratingThroughShapeToAdd:
-                    insert_index_in_combinedShape = (i + 1) % len(combinedShape_coords)
-                    if shapeToAdd_coords[(j + 1) % len(shapeToAdd_coords)] not in combinedShape_coords: # add the coordinate to the combinedShape coordinates list, unless it's already there beacause its a shared point
-                        combinedShape_coords.insert(insert_index_in_combinedShape, shapeToAdd_coords[j])
-                        insert_index_in_combinedShape += 1
-                    start_index_in_shapeToAdd = (j + 1) % len(shapeToAdd_coords)
-                    for m in range(0, len(shapeToAdd_coords)): # iterate through the rest of ShapeToAdd's coordinates and keep inserting the next coordinate into the combinedShape coordinates list, until all the next edges of shapeToAdd (up to the the first edge added) touch on combinedShape, at which point we stop because the rest of shapeToAdd is already accounted for in combinedShape
-                        doneAddingShapeToAdd = True
-                        for n in range(m, len(shapeToAdd_coords) - 1): # check if all the next coordinates and edges of shapeToAdd lie on combinedShape
-                            for o in range(0, len(combinedShape_coords)):
-                                if not check_lines_align_and_touch(combinedShape_coords[o], combinedShape_coords[(o + 1) % len(combinedShape_coords)], shapeToAdd_coords[(start_index_in_shapeToAdd + n) % len(shapeToAdd_coords)], shapeToAdd_coords[(start_index_in_shapeToAdd + n + 1) % len(shapeToAdd_coords)]):
-                                    doneAddingShapeToAdd = False
-                                    break
-                            if not doneAddingShapeToAdd:
-                                break
-                        if doneAddingShapeToAdd: # if all the next coordinates and edges of shapeToAdd lie on combinedShape, then we stop because the rest of shapeToAdd is already accounted for in combinedShape
-                            break
-                        else:
-                            combinedShape_coords.insert(insert_index_in_combinedShape, shapeToAdd_coords[(start_index_in_shapeToAdd + m) % len(shapeToAdd_coords)])
-                            insert_index_in_combinedShape += 1
-            if doneAddingShapeToAdd:
-                break
-        if doneAddingShapeToAdd:
-            break
-    
-    if not doneAddingShapeToAdd:
-        raise ValueError("Shapes must touch with an edge to be joined together (and at least one point of shapeToAdd must be touching combinedShape)")
-
-    print(f"new combinedShape_coords: {combinedShape_coords}")
-    new_coordinates = [list(coord) for coord in combinedShape_coords]
-    return Shape(name=f"Combined Shape", coordinates=new_coordinates)
-
-
-def find_convex_angles(shape : Shape) -> list[list[int, int]]:
-    """
-    IMPORTANT NOTE: this function assumes that the coordinates of the shape are listed in clockwise order, and that the shape is a valid tangram shape (so no holes or self intersections), otherwise it may not work correctly
-    """
-    convex_angles = []
-    for i in range(0, len(shape.coordinates)):
-        prev_coord = shape.coordinates[(i - 1) % len(shape.coordinates)]
-        current_coord = shape.coordinates[i]
-        next_coord = shape.coordinates[(i + 1) % len(shape.coordinates)]
-
-        # Calculate the vectors from the current coordinate to the previous and next coordinates
-        vector_to_prev = (prev_coord[0] - current_coord[0], prev_coord[1] - current_coord[1])
-        vector_to_next = (next_coord[0] - current_coord[0], next_coord[1] - current_coord[1])
-
-        # Calculate the cross product of the two vectors
-        cross_product = vector_to_prev[0] * vector_to_next[1] - vector_to_prev[1] * vector_to_next[0]
-
-        # If the cross product is negative, it's a convex angle
-        if cross_product < 0:
-            # Calculate the dot product
-            dot_product = vector_to_prev[0] * vector_to_next[0] + vector_to_prev[1] * vector_to_next[1]
-            
-            # Calculate the angle in radians using atan2
-            angle_radians = math.atan2(cross_product, dot_product)
-            
-            # Convert to degrees
-            angle_degrees = math.degrees(angle_radians)
-            
-            # Ensure angle is in 0-360 range
-            if angle_degrees < 0:
-                angle_degrees += 360
-            
-            convex_angles.append([i, angle_degrees])
-
-    return convex_angles
-
-
-def two_points_distance(point1, point2):
-    return round(math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2), 3)
-
-
-def edge_angle(p1, p2):
-    return round(math.degrees(math.atan2(p2[1] - p1[1], p2[0] - p1[0])), 1)
-
-"""
-IMPORTANT NOTE: Once again, the functions below assume that the coordinates of the shape are listed in clockwise order
-"""
-def three_points_angle(point1, vertex_point, point3):
-    
-    shape_edge_angle = edge_angle(vertex_point, point3)
-    combined_edge_angle = edge_angle(vertex_point, point1)
-
-    angle_to_rotate = combined_edge_angle - shape_edge_angle
-    """
-    vector1 = (point1[0] - vertex_point[0], point1[1] - vertex_point[1])
-    vector2 = (point3[0] - vertex_point[0], point3[1] - vertex_point[1])
-
-    # Calculate the cross product of the two vectors
-    cross_product = vector1[0] * vector2[1] - vector1[1] * vector2[0]
-    dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
-
-    # Calculate the angle using atan2
-    angle_degrees = math.degrees(math.atan2(cross_product, dot_product))
-    # Ensure angle is in 0-360 range
-    if angle_degrees < 0:
-        angle_degrees += 360
-    """
-    return angle_to_rotate
-
-
-def sides_divisable(a, b, tol=1e-2):
-    if a < tol or b < tol:
-        return False
-    return abs(a/b - round(a/b)) < tol or abs(b/a - round(b/a)) < tol
-
-def generate_puzzle(shapes_list : list[Shape]) -> Shape:
-    final_shapes_list = []
-
-    # Debugging print statements added throughout the code
-
-    # first, We'll move one shape into the final shapes list to start with
-    first_shape = choice(shapes_list)
-    print(f"First shape chosen: {first_shape.name}")
-    final_shapes_list.append(first_shape)
-    shapes_list.remove(first_shape)
-
-    combinedShape = first_shape
-    print(f"Initial combined shape coordinates: {list(combinedShape.coordinates)}")
-
-    loop = 0
-    while len(shapes_list) != 0 and loop < 50:
-        loop += 1
-        addedShapeThisLoop = False
-        print(f"\n--- Loop {loop} ---")
-        print(f"Remaining shapes: {[shape.name for shape in shapes_list]}")
-        print(f"Final shapes: {[shape.name for shape in final_shapes_list]}")
-
-        combined_shape_convex_points = find_convex_angles(combinedShape)
-        print(f"Convex angles in combined shape: {combined_shape_convex_points}")
-
-        shuffle(shapes_list) # shuffle the shapes list to add some randomness to the puzzle generation process
-        convex_hole_filler_list_tier1 = []
-        convex_hole_filler_list_tier2 = []
-        convex_hole_filler_list_tier3 = []
-        convex_hole_filler_list_tier4 = []        
-        tier1_candidate_shapes = []
-        tier2_candidate_shapes = []
-        tier3_candidate_shapes = []
-
-
-        if len(combined_shape_convex_points) != 0:
-            print("Convex angles found in combined shape, can add more shapes.")
-            for i in range(0, len(combined_shape_convex_points)):
-                convex_point_index = combined_shape_convex_points[i][0]
-                convex_point_angle = round(combined_shape_convex_points[i][1])
-                print(f"\nChecking convex angle at index {convex_point_index} with angle {convex_point_angle} degrees")
-
-                for shape in shapes_list:
-                    print(f"Trying to fit shape: {shape.name}")
-                    for j in range(0, len(shape.coordinates)):
-                        print(f"Trying to fit vertex {shape.coordinates[j]} of shape {shape.name} to convex point {combinedShape.coordinates[convex_point_index]} of combined shape")
-                        shapeAngle = round(three_points_angle(shape.coordinates[(j - 1) % len(shape.coordinates)], shape.coordinates[j], shape.coordinates[(j + 1) % len(shape.coordinates)]))
-                        if shapeAngle > convex_point_angle:
-                            continue
-                        elif shapeAngle < convex_point_angle:
-                            if shape not in convex_hole_filler_list_tier4:
-                                convex_hole_filler_list_tier4.append((shape, convex_point_index, j))
-                        elif shapeAngle == convex_point_angle:
-                            if shape not in convex_hole_filler_list_tier3:
-                                convex_hole_filler_list_tier3.append((shape, convex_point_index, j))
-                            combinedShapeSide1Length = round(two_points_distance(combinedShape.coordinates[convex_point_index], combinedShape.coordinates[(convex_point_index - 1) % len(combinedShape.coordinates)]), 2)
-                            combinedShapeSide2Length = round(two_points_distance(combinedShape.coordinates[convex_point_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)]), 2)
-                            shapeSide1Length = round(two_points_distance(shape.coordinates[j], shape.coordinates[(j - 1) % len(shape.coordinates)]), 2)
-                            shapeSide2Length = round(two_points_distance(shape.coordinates[j], shape.coordinates[(j + 1) % len(shape.coordinates)]), 2)
-                            if (((sides_divisable(shapeSide1Length, combinedShapeSide1Length)) and (sides_divisable(shapeSide2Length, combinedShapeSide2Length)))) or (((sides_divisable(shapeSide2Length, combinedShapeSide1Length)) and (sides_divisable(shapeSide1Length, combinedShapeSide2Length)))):
-                                if shape not in convex_hole_filler_list_tier1:
-                                    convex_hole_filler_list_tier1.append((shape, convex_point_index, j))
-                            elif sides_divisable(shapeSide1Length, combinedShapeSide1Length) or sides_divisable(shapeSide2Length, combinedShapeSide2Length) or sides_divisable(shapeSide2Length, combinedShapeSide1Length) or sides_divisable(shapeSide1Length, combinedShapeSide2Length):
-                                if shape not in convex_hole_filler_list_tier2:
-                                    convex_hole_filler_list_tier2.append((shape, convex_point_index, j))
-            if len(convex_hole_filler_list_tier1) != 0:
-                print("\nTier 1 candidate shapes found that perfectly fit a convex angle with matching side lengths:")
-                for candidate in convex_hole_filler_list_tier1:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Convex Point Index: {candidate[1]}, Shape Vertex Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        convex_point_index = candidate[1]
-                        shape_vertex_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[convex_point_index][0] - shape_to_join.coordinates[shape_vertex_index][0], combinedShape.coordinates[convex_point_index][1] - shape_to_join.coordinates[shape_vertex_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_vertex_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit convex angle")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[convex_point_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        distance1 = two_points_distance(shape_to_join.coordinates[shape_vertex_index], shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)])
-                        distance2 = two_points_distance(combinedShape.coordinates[convex_point_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        if not sides_divisable(distance1, distance2):
-                            reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                            print(f"Reflected shape {shape_to_join.name} across angle at vertex {shape_to_join.coordinates[shape_vertex_index]} to try to fit convex angle")
-                            print(f"New coordinates of shape to join after reflection: {shape_to_join.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            shape_to_join.coordinates = [coord[:] for coord in original]
-                            continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-            elif len(convex_hole_filler_list_tier2) != 0:
-                print("\nTier 2 candidate shapes found that perfectly fit a convex angle but only one side length matches:")
-                for candidate in convex_hole_filler_list_tier2:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Convex Point Index: {candidate[1]}, Shape Vertex Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        convex_point_index = candidate[1]
-                        shape_vertex_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[convex_point_index][0] - shape_to_join.coordinates[shape_vertex_index][0], combinedShape.coordinates[convex_point_index][1] - shape_to_join.coordinates[shape_vertex_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_vertex_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit convex angle")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[convex_point_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        distance1 = two_points_distance(shape_to_join.coordinates[shape_vertex_index], shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)])
-                        distance2 = two_points_distance(combinedShape.coordinates[convex_point_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        distance3 = two_points_distance(shape_to_join.coordinates[shape_vertex_index], shape_to_join.coordinates[(shape_vertex_index - 1) % len(shape_to_join.coordinates)])
-                        distance4 = two_points_distance(combinedShape.coordinates[convex_point_index], combinedShape.coordinates[(convex_point_index - 1) % len(combinedShape.coordinates)])
-                        if not (sides_divisable(distance1, distance2) or sides_divisable(distance3, distance4)):
-                            reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                            print(f"Reflected shape {shape_to_join.name} across angle at vertex {shape_to_join.coordinates[shape_vertex_index]} to try to fit convex angle")
-                            print(f"New coordinates of shape to join after reflection: {shape_to_join.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            shape_to_join.coordinates = [coord[:] for coord in original]
-                            continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-            elif len(convex_hole_filler_list_tier3) != 0:
-                print("\nTier 3 candidate shapes found that perfectly fit a convex angle but no side lengths match:")
-                for candidate in convex_hole_filler_list_tier3:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Convex Point Index: {candidate[1]}, Shape Vertex Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        convex_point_index = candidate[1]
-                        shape_vertex_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[convex_point_index][0] - shape_to_join.coordinates[shape_vertex_index][0], combinedShape.coordinates[convex_point_index][1] - shape_to_join.coordinates[shape_vertex_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_vertex_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit convex angle")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[convex_point_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                            if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                                shape_to_join.coordinates = [coord[:] for coord in original]
-                                continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-            elif len(convex_hole_filler_list_tier4) != 0:
-                print("\nTier 4 candidate shapes found that fit a convex angle but are smaller than the angle:")
-                for candidate in convex_hole_filler_list_tier4:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Convex Point Index: {candidate[1]}, Shape Vertex Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        convex_point_index = candidate[1]
-                        shape_vertex_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[convex_point_index][0] - shape_to_join.coordinates[shape_vertex_index][0], combinedShape.coordinates[convex_point_index][1] - shape_to_join.coordinates[shape_vertex_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_vertex_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_vertex_index], combinedShape.coordinates[(convex_point_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit convex angle")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[convex_point_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                            if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                                convex_point_angle = round(combined_shape_convex_points[i][1])
-                                shapeAngle = round(three_points_angle(shape.coordinates[(j - 1) % len(shape.coordinates)], shape.coordinates[j], shape.coordinates[(j + 1) % len(shape.coordinates)]))
-                                shape_to_join.rotate(convex_point_angle - shapeAngle, origin=combinedShape.coordinates[convex_point_index])
-                                if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                    print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                    reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                                    if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                        print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                        reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_vertex_index])
-                                        shape_to_join.coordinates = [coord[:] for coord in original]
-                                        continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-        else:
-            print("No convex angles found in combined shape.")
-            for i in range(0, len(combinedShape.coordinates)):
-                combinedShapeSideLength = round(two_points_distance(combinedShape.coordinates[i], combinedShape.coordinates[(i + 1) % len(combinedShape.coordinates)]), 2)
-                for j in range(0, len(shapes_list)):
-                    shape = shapes_list[j]
-                    for k in range(0, len(shape.coordinates)):
-                        shapeSideLength = round(two_points_distance(shape.coordinates[k], shape.coordinates[(k + 1) % len(shape.coordinates)]), 2)
-                        if abs(shapeSideLength - combinedShapeSideLength) < 0.02:
-                            if shape not in tier1_candidate_shapes:
-                                tier1_candidate_shapes.append((shape, i, k))
-                                continue
-                        elif sides_divisable(shapeSideLength, combinedShapeSideLength):
-                            if shape not in tier2_candidate_shapes:
-                                tier2_candidate_shapes.append((shape, i, k))
-                                continue
-                        else:
-                            if shape not in tier3_candidate_shapes:
-                                tier3_candidate_shapes.append((shape, i, k))
-                                continue
-                if len(tier1_candidate_shapes) != 0:
-                    print("\nTier 1 candidate shapes found that have a side length that perfectly matches a side of the combined shape:")
-                    for candidate in tier1_candidate_shapes:
-                        try:
-                            print(f"Shape: {candidate[0].name}, Combined Shape Side Index: {candidate[1]}, Shape Side Index: {candidate[2]}")
-                            shape_to_join = candidate[0]
-                            original = [coord[:] for coord in shape_to_join.coordinates]
-                            combined_shape_side_index = candidate[1]
-                            shape_side_index = candidate[2]
-                            shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index][0] - shape_to_join.coordinates[shape_side_index][0], combinedShape.coordinates[combined_shape_side_index][1] - shape_to_join.coordinates[shape_side_index][1])
-                            angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)])
-                            print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                            print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                            print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit edge")
-                            shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[combined_shape_side_index])
-                            print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                            print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                            if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index + 1][0] - combinedShape.coordinates[combined_shape_side_index][0], combinedShape.coordinates[combined_shape_side_index + 1][1] - combinedShape.coordinates[combined_shape_side_index][1])
-                                shapeAngle = three_points_angle(shape_to_join.coordinates[(shape_side_index - 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)])
-                                shape_to_join.rotate(180 - shapeAngle, origin=shape_to_join.coordinates[shape_side_index])
-                                reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                    print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                    reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                    shape_to_join.coordinates = [coord[:] for coord in original]
-                                    continue
-                            combinedShape = join_shapes(combinedShape, shape_to_join)
-                            print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                            final_shapes_list.append(shape_to_join)
-                            shapes_list.remove(shape_to_join)
-                            print(f"Final shapes list: {final_shapes_list}")
-                            print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                            print(f"Shapes list: {shapes_list}")
-                            addedShapeThisLoop = True
-                            break
-                        except Exception as e:
-                            print(f"Error occurred while processing candidate: {e}")
-                            continue
-                if addedShapeThisLoop:
-                    break
-            if not addedShapeThisLoop and len(tier2_candidate_shapes) != 0:
-                print("\nTier 2 candidate shapes found that have a side length that is divisible with a side of the combined shape:")
-                for candidate in tier2_candidate_shapes:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Combined Shape Side Index: {candidate[1]}, Shape Side Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        combined_shape_side_index = candidate[1]
-                        shape_side_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index][0] - shape_to_join.coordinates[shape_side_index][0], combinedShape.coordinates[combined_shape_side_index][1] - shape_to_join.coordinates[shape_side_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit edge")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[combined_shape_side_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            shape_to_join.translate(combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][0] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][0], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][1] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][1])
-                            if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                shape_to_join.translate(combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][0] - shape_to_join.coordinates[shape_side_index][0], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][1] - shape_to_join.coordinates[shape_side_index][1])
-                                shapeAngle = three_points_angle(shape_to_join.coordinates[(shape_side_index - 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)])
-                                shape_to_join.rotate(180 - shapeAngle, origin=shape_to_join.coordinates[shape_side_index])
-                                reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                    print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                    shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index][0] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][0], combinedShape.coordinates[combined_shape_side_index][1] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][1])
-                                    if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                        reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                        shape_to_join.coordinates = [coord[:] for coord in original]
-                                        continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-            if not addedShapeThisLoop and len(tier3_candidate_shapes) != 0:
-                print("\nTier 3 candidate shapes found that have a side length that does not match but is not divisible with a side of the combined shape:")
-                for candidate in tier3_candidate_shapes:
-                    try:
-                        print(f"Shape: {candidate[0].name}, Combined Shape Side Index: {candidate[1]}, Shape Side Index: {candidate[2]}")
-                        shape_to_join = candidate[0]
-                        original = [coord[:] for coord in shape_to_join.coordinates]
-                        combined_shape_side_index = candidate[1]
-                        shape_side_index = candidate[2]
-                        shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index][0] - shape_to_join.coordinates[shape_side_index][0], combinedShape.coordinates[combined_shape_side_index][1] - shape_to_join.coordinates[shape_side_index][1])
-                        angleToRotateShape = three_points_angle(shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)])
-                        print(f"Current coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"Current coordinates of combined shape: {combinedShape.coordinates}")
-                        print(f"Rotating shape {shape_to_join.name} by {angleToRotateShape} degrees to fit edge")
-                        shape_to_join.rotate(angleToRotateShape, origin=combinedShape.coordinates[combined_shape_side_index])
-                        print(f"New coordinates of shape to join: {shape_to_join.coordinates}")
-                        print(f"New coordinates of combined shape: {combinedShape.coordinates}")
-                        if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                            print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                            shape_to_join.translate(combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][0] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][0], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][1] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][1])
-                            if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                shape_to_join.translate(combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][0] - shape_to_join.coordinates[shape_side_index][0], combinedShape.coordinates[(combined_shape_side_index + 1) % len(combinedShape.coordinates)][1] - shape_to_join.coordinates[shape_side_index][1])
-                                shapeAngle = three_points_angle(shape_to_join.coordinates[(shape_side_index - 1) % len(shape_to_join.coordinates)], shape_to_join.coordinates[shape_side_index], shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)])
-                                shape_to_join.rotate(180 - shapeAngle, origin=shape_to_join.coordinates[shape_side_index])
-                                reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                    print(f"Shape {shape_to_join.name} overlaps with combined shape after transformation, skipping this candidate.")
-                                    shape_to_join.translate(combinedShape.coordinates[combined_shape_side_index][0] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][0], combinedShape.coordinates[combined_shape_side_index][1] - shape_to_join.coordinates[(shape_side_index + 1) % len(shape_to_join.coordinates)][1])
-                                    if gramtan_checks.check_contains(combinedShape, shape_to_join):
-                                        reflect_shape_across_angle(shape_to_join, shape_to_join.coordinates[shape_side_index])
-                                        shape_to_join.coordinates = [coord[:] for coord in original]
-                                        continue
-                        combinedShape = join_shapes(combinedShape, shape_to_join)
-                        print(f"Successfully joined shape {shape_to_join.name} to combined shape.")
-                        final_shapes_list.append(shape_to_join)
-                        shapes_list.remove(shape_to_join)
-                        print(f"Final shapes list: {final_shapes_list}")
-                        print(f"Combined shape coordinates after joining: {combinedShape.coordinates}")
-                        print(f"Shapes list: {shapes_list}")
-                        addedShapeThisLoop = True
-                        break
-                    except Exception as e:
-                        print(f"Error occurred while processing candidate: {e}")
-                        continue
-            if not addedShapeThisLoop:
-                print("No suitable candidate shapes found to fit edges of combined shape, trying to fit shapes into convex angles if they exist.")
-                continue
-    if len(shapes_list) == 0:
-        print("All shapes successfully joined into one shape that matches the silhouette!")
-        graph_everything([combinedShape], 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
-        graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
-
-        return combinedShape
-    else:
-        print("Could not find a way to join all shapes into one shape that matches the silhouette.")
-        return None
-
+# this'll graph the shapes once we have them all placed
 def graph_everything(final_shapes_list, alpha, border, title, loops):
     plt.rcParams['figure.figsize'] = [10, 8]    # Set the figure size for better visibility
     fig, ax = plt.subplots()    # Create a figure and axis
@@ -703,24 +76,136 @@ def graph_everything(final_shapes_list, alpha, border, title, loops):
     ax.grid(False)    # Remove grid for better visibility
     ax.axis('off')  # Turn off the axis
     plt.title(title, color='#ff9966')
-    plt.suptitle("Made with " + str(loops) + " lolololoops", fontsize=12, color="#ff9966")
+    plt.suptitle("Made with " + str(loops) + " loops", fontsize=12, color="#ff9966")
     plt.show()
 
-# Suppose the small triangle has legs of length 1 unit which we'll call 'Length_A'
-LENGTH_A = 1
-# The Small Triangle has a Hypotnuse of LENGTH_A * sqrt(2), which is also the leg length of the Medium Triangle
-LENGTH_B = LENGTH_A * round(np.sqrt(2), 4)
+# defining the shapes class:
+class Shape:
+    def __init__(self, name, coordinates):
+        """
+        Initialize a Shape object.
 
-shapes_list = [
+        :param name: Name of the shape (e.g., "Small Triangle", "Square").
+        :param coordinates: List of (x, y) tuples representing the vertices of the shape.
+        """
+        self.name = name
+        self.coordinates = coordinates
+        self.polygon = Polygon(coordinates)  # Create a Shapely Polygon from the coordinates
+
+    def scale(self, x_factor, y_factor, origin='center'):
+        """
+        Scale the shape by given factors along x and y axes.
+
+        :param x_factor: Scaling factor along the x-axis.
+        :param y_factor: Scaling factor along the y-axis.
+        :param origin: Point (x, y) to scale around.
+        """
+        self.polygon = scale(self.polygon, xfact=x_factor, yfact=y_factor, origin='center')
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+    
+    def scaled(self, x_factor, y_factor, origin='center'):
+        """
+        Return a new scaled Shape by given factors along x and y axes.
+
+        :param x_factor: Scaling factor along the x-axis.
+        :param y_factor: Scaling factor along the y-axis.
+        :param origin: Point (x, y) to scale around.
+        :return: A new scaled Shape object.
+        """
+        scaled_polygon = scale(self.polygon, xfact=x_factor, yfact=y_factor, origin='center')
+        scaled_coordinates = list(scaled_polygon.exterior.coords)[:-1]  # Get new coordinates
+        return Shape(self.name, scaled_coordinates)
+
+    def rotate(self, angle, origin=(0, 0)):
+        """
+        Rotate the shape by a given angle around a specified origin.
+
+        :param angle: Angle in degrees (counterclockwise).
+        :param origin: Point (x, y) to rotate around.
+        """
+        self.polygon = rotate(self.polygon, angle, origin=origin)
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def translate(self, x_offset, y_offset):
+        """
+        Translate the shape by a given offset.
+
+        :param x_offset: Offset along the x-axis.
+        :param y_offset: Offset along the y-axis.
+        """
+        self.polygon = translate(self.polygon, xoff=x_offset, yoff=y_offset)
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def reflect(self, axis='x', origin=(0, 0)):
+        """
+        Reflect the shape across a specified axis.
+
+        :param axis: The axis to reflect across ('x' or 'y').
+        :param origin: The point (x, y) to use as the reflection origin.
+        """
+        if axis == 'x':
+            self.polygon = scale(self.polygon, xfact=1, yfact=-1, origin=origin)
+        elif axis == 'y':
+            self.polygon = scale(self.polygon, xfact=-1, yfact=1, origin=origin)
+        else:
+            raise ValueError("Axis must be 'x' or 'y'")
+        self.coordinates = list(self.polygon.exterior.coords)[:-1]  # Update coordinates
+
+    def overlaps(self, other_shape, tolerance=1.0):
+        """
+        Check if this shape overlaps with another shape.
+
+        :param other_shape: Another Shape object.
+        :return: True if the shapes overlap, False otherwise (This includes when one shape contains the other).
+        """
+        if not isinstance(other_shape, Shape):
+            raise ValueError("Argument must be a Shape object.")
+        if tolerance > 1 or tolerance < 0:
+            raise ValueError("Tolerance must be between 0 and 1.")       
+        
+        tolerance_shape = other_shape.scaled(tolerance, tolerance, origin='center')
+        return self.polygon.overlaps(tolerance_shape.polygon)
+
+    def contains(self, other):
+        """
+        Check if this shape completely contains another shape or a point.
+
+        :param other: Another Shape object or a tuple (x, y) representing a point.
+        :return: True if this shape contains the other shape or point, False otherwise.
+        """
+        if isinstance(other, Shape):
+            return self.polygon.contains(other.polygon)
+        elif isinstance(other, Point):
+            return self.polygon.contains(other)  # Directly use the Point object
+        elif isinstance(other, tuple) and len(other) == 2:
+            return self.polygon.contains(Point(other))
+        else:
+            raise ValueError("Argument must be a Shape object or a tuple representing a point.")
+
+    def __repr__(self):
+        """
+        String representation of the shape.
+        """
+        return f"Shape(name={self.name}, coordinates={self.coordinates})"
+    
+# Define the 10 shapes
+
+# RULES FOR MAKING SHAPES
+# 1. All Interior angles are either 45, 90, or 135 degrees
+# 2. All side Length should be divisable by Length_A or be Length_B
+# 3. All shapes should be polygons (no holes or curves)
+# 4. All shapes should be at least (the largest side length divided by 10) thick at their midpoints
+
+DEFAULT_SHAPES_LIST = [
     # 1. Bigger Triangle
     Shape(
         name="Bigger Triangle",
-        coordinates=[(0, 0), (2 * LENGTH_B, 0), (0, 2 * LENGTH_B)]
+        coordinates=[(0, 0), (LENGTH_D, 0), (0, LENGTH_D)]
     ),
     # 2. Big Triangle
     Shape(
         name="Big Triangle",
-        coordinates=[(0, 0), (2 * LENGTH_A, 0), (0, 2 * LENGTH_A)]
+        coordinates=[(0, 0), (LENGTH_C, 0), (0, LENGTH_C)]
     ),
     # 3. Medium Triangle
     Shape(
@@ -755,7 +240,7 @@ shapes_list = [
     # 9. Rectangle
     Shape(
         name="Rectangle",
-        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, 2*LENGTH_A), (0, 2*LENGTH_A)]
+        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_C), (0, LENGTH_C)]
     ),
     # 10. Trapezoid
     Shape(
@@ -764,4 +249,425 @@ shapes_list = [
     )
 ]
 
-shape = generate_puzzle(shapes_list)
+shapes_list = copy.deepcopy(DEFAULT_SHAPES_LIST)
+final_shapes_list = []
+
+# Debugging print statements added throughout the code
+
+# first, We'll move one shape into the final shapes list to start with
+first_shape = choice(shapes_list)
+print(f"First shape chosen: {first_shape.name}")
+final_shapes_list.append(first_shape)
+shapes_list.remove(first_shape)
+
+combined_shape = first_shape.polygon
+print(f"Initial combined shape coordinates: {list(combined_shape.exterior.coords)}")
+
+# now, we choose a random shape that has a side that can be shared with one of the shapes in the final shapes list
+# and try to place it there without overlapping any of the other shapes in the final shapes list
+# and we repeat this until all shapes are placed
+loop = 0
+while len(shapes_list) != 0 and loop < 50:
+    loop += 1
+
+    print(f"\n--- Loop {loop} ---")
+    print(f"Remaining shapes: {[shape.name for shape in shapes_list]}")
+    print(f"Final shapes: {[shape.name for shape in final_shapes_list]}")
+
+
+    # Here, I want to use the combined shape to help guide where to place the next shape
+    # first, I need to find a convex angle on the combined shape to work with,
+    # if there are no convex angles, I'll let the algorithm run as normal without that guidance
+    combined_shape_convex_points = []
+    print(f"Combined shape points: {list(combined_shape.exterior.coords)[:-1]}")
+    for combined_shape_point in list(combined_shape.exterior.coords)[:-1]:
+        Point_A = Point(combined_shape_point)
+        index = list(combined_shape.exterior.coords).index(combined_shape_point)
+        Point_B = Point(list(combined_shape.exterior.coords)[(index + 1) % (len(list(combined_shape.exterior.coords)) - 1)]) # the -1 is because the last point is the same as the first point
+        Point_C = Point(list(combined_shape.exterior.coords)[(index + 2) % (len(list(combined_shape.exterior.coords)) - 1)])
+        print(f"Combined shape point: {Point_B}")
+        if Point_A.distance(Point_B) < .01 or Point_B.distance(Point_C) < .01:
+            print("convex angle caused by slight translation disparity")
+            continue
+        if combined_shape.covers(Point((Point_A.x + Point_C.x) / 2, (Point_A.y + Point_C.y) / 2)):
+            print("Found concave angle, continuing to next point.")
+            continue  # this is a concave angle, so we skip it
+        angleBA = math.atan2(Point_B.y - Point_A.y, Point_B.x - Point_A.x)   # angle of the final shape side segment
+        angleBC = math.atan2(Point_B.y - Point_C.y, Point_B.x - Point_C.x)   # angle of the shape to place side segment
+        print(f"AngleBA: {math.degrees(angleBA)}, AngleBC: {math.degrees(angleBC)}")
+        convex_angle = round(abs(math.degrees(angleBA - angleBC)))
+        if convex_angle > 180:
+            convex_angle = 360 - convex_angle
+        print(f"angle at combined shape point: {convex_angle}")
+        if (convex_angle == 45) or (convex_angle == 90) or (convex_angle == 135):
+            print(f"Using convex point with angle {convex_angle} degrees: {Point_A, Point_B, Point_C}")
+            combined_shape_convex_points.append((Point_A, Point_B, Point_C, Point_B.distance(Point_A), Point_B.distance(Point_C), convex_angle))
+
+    print(f"Combined shape convex points: {combined_shape_convex_points}")
+
+    line_segments_to_use = []
+    if len(combined_shape_convex_points) == 0:
+        # no convex points found, proceed as normal
+        print("No convex points found on combined shape.")
+        coords_to_use = list(combined_shape.exterior.coords)[:-1]
+        print(f"Using combined shape coordinates: {coords_to_use}")
+        for coords_to_use_index in range(len(coords_to_use)):
+            x1, y1 = coords_to_use[coords_to_use_index]
+            x2, y2 = coords_to_use[(coords_to_use_index + 1) % len(coords_to_use)]
+            line_segments_to_use.append(((x1, y1), (x2, y2)))
+    else:
+        for convex_point in combined_shape_convex_points:
+            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[0].x, convex_point[0].y), convex_point[5], convex_point[4]))  # side length from Point_B to Point_C, its twin
+            line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[2].x, convex_point[2].y), convex_point[5], convex_point[3])) # side length from Point_B to Point_A, its twin
+        line_segments_to_use.extend(line_segments_to_use)
+        
+        coords_to_use = list(combined_shape.exterior.coords)[:-1]
+        print(f"Using combined shape coordinates: {coords_to_use}")
+        for coords_to_use_index in range(len(coords_to_use)):
+            x1, y1 = coords_to_use[coords_to_use_index]
+            x2, y2 = coords_to_use[(coords_to_use_index + 1) % len(coords_to_use)]
+            line_segments_to_use.append(((x1, y1), (x2, y2)))
+
+
+    # Next, we try to place the shape_to_place next to the random_final_shape
+    num_of_convex_points = len(combined_shape_convex_points)
+    print("highest_tier_candidate_shape_achieved reset", num_of_convex_points)
+    highest_tier_candidate_shape_achieved = 0
+
+    successfully_placed_shape = False
+    for line_segments_to_use_index in range(len(line_segments_to_use)):
+        num_of_convex_points -= 1
+        print("num_of_convex_points now at:", num_of_convex_points)
+        x1, y1 = line_segments_to_use[line_segments_to_use_index][0]
+        x2, y2 = line_segments_to_use[line_segments_to_use_index][1]
+        point1 = Point(x1, y1)
+        point2 = Point(x2, y2)
+        combined_shape_side_midpoint = Point((point1.x + point2.x) / 2, (point1.y + point2.y) / 2)
+        print(f"Combined shape side midpoint: {combined_shape_side_midpoint}")
+        # these two points make a line segment
+        print(f"Trying line segment: ({point1.x}, {point1.y}) to ({point2.x}, {point2.y})")
+        combined_shape_side_length = point1.distance(point2)
+        print(f"Combined shape side length: {combined_shape_side_length}")
+
+        candidate_shapes = []
+        shuffle(shapes_list)
+
+        if len(line_segments_to_use[line_segments_to_use_index]) > 2:
+            print(f"Using combined shape side length: {combined_shape_side_length} for filtering candidate shapes.")
+            print(f"Line segments being used: {line_segments_to_use[line_segments_to_use_index]}")
+            convex_point_angle = line_segments_to_use[line_segments_to_use_index][2]
+            print(f"Using convex point angle for matching: {convex_point_angle} degrees")
+            convex_point_twin_side_length = line_segments_to_use[line_segments_to_use_index][3]
+            print(f"Using convex point twin side length for matching: {convex_point_twin_side_length}")
+            convex_hole_filler_list = []
+            tier0_candidate_shapes = []
+            tier1_candidate_shapes = []
+            tier2_candidate_shapes = []
+            tier3_candidate_shapes = []
+            tier4_candidate_shapes = []
+            for shape in shapes_list:
+                for shape_coord in shape.coordinates:
+                    index = shape.coordinates.index(shape_coord)
+                    shape_pointA = shape_coord
+                    shape_pointB = shape.coordinates[(index + 1) % len(shape.coordinates)]
+                    shape_pointC = shape.coordinates[(index + 2) % len(shape.coordinates)]
+                    print(f"tier shape coords: {shape_pointA, shape_pointB, shape_pointC}")
+                    shape_angleBA = math.atan2(shape_pointB[1] - shape_pointA[1], shape_pointB[0] - shape_pointA[0])   # angle of the final shape side segment
+                    shape_angleBC = math.atan2(shape_pointB[1] - shape_pointC[1], shape_pointB[0] - shape_pointC[0])   # angle of the shape to place side segment
+                    print(f"shape angleBA and BC: {math.degrees(shape_angleBA), math.degrees(shape_angleBC)}")
+                    shape_angle = round(abs(math.degrees(shape_angleBA - shape_angleBC) % 180))
+                    print(f"shape angle: {shape_angle}")
+                    shape_distanceAB = ((shape_pointA[0] - shape_pointB[0]) ** 2 + (shape_pointA[1] - shape_pointB[1]) ** 2) ** 0.5
+                    shape_distanceBC = ((shape_pointA[0] - shape_pointC[0]) ** 2 + (shape_pointA[1] - shape_pointC[1]) ** 2) ** 0.5
+                    print(f"shape_distanceAB and shape_distanceBC: {shape_distanceAB, shape_distanceBC}")
+                    if shape_angle == convex_point_angle:
+                        if shape not in tier1_candidate_shapes:
+                            tier1_candidate_shapes.append(shape)
+                            print(f"Adding shape {shape.name} to tier 1.")
+                        if (round(shape_distanceAB, 4) == round(combined_shape_side_length, 4)) or (round(shape_distanceBC, 4) == round(combined_shape_side_length, 4)):
+                            if combined_shape_side_length > convex_point_twin_side_length:
+                                ratio = combined_shape_side_length / convex_point_twin_side_length
+                            else:
+                                ratio = convex_point_twin_side_length / combined_shape_side_length
+                            if (round(shape_distanceAB, 4) == round(convex_point_twin_side_length, 4)) or (round(shape_distanceBC, 4) == round(convex_point_twin_side_length, 4)):
+                                tier4_candidate_shapes.append(shape)
+                                print(f"Adding shape {shape.name} to tier 4.")
+                                break
+                            elif (abs(ratio - round(ratio)) < 1e-3):
+                                if shape not in tier2_candidate_shapes:
+                                    tier2_candidate_shapes.append(shape)
+                                    print(f"Adding shape {shape.name} to tier 2.")
+                        elif (round(shape_distanceAB, 4) == round(convex_point_twin_side_length, 4)) or (round(shape_distanceBC, 4) == round(convex_point_twin_side_length, 4)):
+                            if combined_shape_side_length > convex_point_twin_side_length:
+                                ratio = combined_shape_side_length / convex_point_twin_side_length
+                            else:
+                                ratio = convex_point_twin_side_length / combined_shape_side_length
+                            if (round(shape_distanceAB, 4) == round(combined_shape_side_length, 4)) or (round(shape_distanceBC, 4) == round(combined_shape_side_length, 4)):
+                                tier4_candidate_shapes.append(shape)
+                                print(f"Adding shape {shape.name} to tier 4.")
+                                break
+                            elif (abs(ratio - round(ratio)) < 1e-3):
+                                if shape not in tier3_candidate_shapes:
+                                    tier3_candidate_shapes.append(shape)
+                                    print(f"Adding shape {shape.name} to tier 3.")
+                    else:
+                        if shape not in tier1_candidate_shapes:
+                            if shape not in tier0_candidate_shapes:
+                                tier0_candidate_shapes.append(shape)
+                                print(f"Adding shape {shape.name} to tier 0.")
+            convex_hole_filler_list = tier4_candidate_shapes + tier2_candidate_shapes + tier3_candidate_shapes
+
+            if len(tier4_candidate_shapes) != 0:
+                candidate_shapes.extend(tier4_candidate_shapes)
+                candidate_shapes.extend(tier3_candidate_shapes)
+                candidate_shapes.extend(tier2_candidate_shapes)
+                candidate_shapes.extend(tier1_candidate_shapes)
+                candidate_shapes.extend(tier0_candidate_shapes)
+            elif len(tier2_candidate_shapes) != 0 or len(tier3_candidate_shapes) != 0:
+                candidate_shapes.extend(tier3_candidate_shapes)
+                candidate_shapes.extend(tier2_candidate_shapes)
+                candidate_shapes.extend(tier1_candidate_shapes)
+                candidate_shapes.extend(tier0_candidate_shapes)
+            elif len(tier1_candidate_shapes) != 0:
+                candidate_shapes.extend(tier1_candidate_shapes)
+                candidate_shapes.extend(tier0_candidate_shapes)
+            else:
+                candidate_shapes = copy.deepcopy(shapes_list)
+                print("No matching shapes found, using all shapes as candidates.")
+        else:
+            convex_hole_filler_list = []
+            candidate_shapes = copy.deepcopy(shapes_list)
+            print("No convex point angle, using all shapes as candidates.", candidate_shapes)
+
+        # next, we try to place each remaining shape on this line segment till one works
+        for original_shape in candidate_shapes:
+            shape_to_place = copy.deepcopy(original_shape)
+            print(shape_to_place, "23", shape_to_place.coordinates)
+            for shape_to_place_coordinates_index in range(len(shape_to_place.coordinates)):
+                x3, y3 = shape_to_place.coordinates[shape_to_place_coordinates_index]
+                x4, y4 = shape_to_place.coordinates[(shape_to_place_coordinates_index + 1) % len(shape_to_place.coordinates)]
+                point3 = Point(x3, y3)
+                point4 = Point(x4, y4)
+                shape_to_place_side_midpoint = Point((point3.x + point4.x) / 2, (point3.y + point4.y) / 2)
+                print(f"Midpoint: {shape_to_place_side_midpoint}")
+                print(f"Shape_to_place line segment0: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                print(f"Shape_to_place coordinates: {shape_to_place.coordinates}")
+                
+                x5, y5 = shape_to_place.coordinates[(shape_to_place_coordinates_index + 2) % len(shape_to_place.coordinates)]
+                point5 = Point(x5, y5)
+
+                # this makes sure the combined_shape_side_length is divisable by the shape_to_place line segment or vice versa
+                if combined_shape_side_length > point3.distance(point4):
+                    ratio = combined_shape_side_length / point3.distance(point4)
+                else:
+                    ratio = point3.distance(point4) / combined_shape_side_length
+                if not abs(ratio - round(ratio)) < 1e-3:
+                    print("shape side length does not divide into combined shape side length or vice versa. Skipping.")
+                    continue
+                # this translates the shape_to_place so that its line segment shares one point with the random_final_shape line segment
+                print("Line segment ok. Aligning shapes.")
+                print(f"Translating shape_to_place by ({point1.x - point4.x}, {point1.y - point4.y})")
+                xtranslate = point1.x - point4.x
+                ytranslate = point1.y - point4.y
+                shape_to_place.translate(xtranslate, ytranslate)
+                point3 = translate(point3, xoff=xtranslate, yoff=ytranslate)
+                point4 = translate(point4, xoff=xtranslate, yoff=ytranslate)
+                point5 = translate(point5, xoff=xtranslate, yoff=ytranslate)
+                shape_to_place_side_midpoint = translate(shape_to_place_side_midpoint, xoff=xtranslate, yoff=ytranslate)
+                print(f"Shape_to_place line segment1: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                print(f"Translated shape_to_place to: {shape_to_place.coordinates}")
+
+                # this rotates the shape_to_place so that its line segment is now aligned with the random_final_shape line segment
+                angle1 = math.atan2(point2.y - point1.y, point2.x - point1.x)   # angle of the final shape side segment
+                angle2 = math.atan2(point3.y - point4.y, point3.x - point4.x)   # angle of the shape to place side segment
+                print(f"Angle1: {math.degrees(angle1)}, Angle2: {math.degrees(angle2)}")
+                rotation_angle = math.degrees(angle1 - angle2)
+                print(f"Rotation angle: {rotation_angle}")
+                xRotateOrigin = point1.x
+                yRotateOrigin = point1.y
+                shape_to_place.rotate(rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                point3 = rotate(point3, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                point4 = rotate(point4, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                point5 = rotate(point5, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                shape_to_place_side_midpoint = rotate(shape_to_place_side_midpoint, rotation_angle, origin=(xRotateOrigin, yRotateOrigin))
+                print(f"Shape_to_place line segment2: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                print(f"Rotated shape_to_place_side_midpoint to: ({shape_to_place_side_midpoint.x}, {shape_to_place_side_midpoint.y})")
+                print(f"Rotated shape_to_place to: {shape_to_place.coordinates}")
+
+                # Here, we check eight different orientations/positions of the shape_to_place and check every time if it overlaps with the combined_shape
+                # check if the the shape_to_place is facing the wrong way (aka towards the random_final_shape)
+                for rotation in range(2):  # tries both sides of the shape
+                    if not (combined_shape.covers(shape_to_place.polygon) or shape_to_place.polygon.covers(combined_shape) or combined_shape.buffer(-1e-4).intersects(shape_to_place.polygon)):
+                        if shape_to_place in convex_hole_filler_list:
+                            print(f"Placing convex hole filler shape: {shape_to_place.name}")
+                            if (shape_to_place in tier4_candidate_shapes or shape_to_place in tier2_candidate_shapes) and round(combined_shape_side_length, 2) == round(point3.distance(point4), 2):
+                                print("Shape fits perfectly on combined shape side. Proceeding to place shape.")
+                                if shape_to_place in tier2_candidate_shapes:
+                                    break
+                                elif shape_to_place in tier4_candidate_shapes and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                    print("Shape also fits perfectly on convex point twin side. Proceeding to place shape.")
+                                    break
+                                else:
+                                    pass
+                            elif (shape_to_place in tier3_candidate_shapes) and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                print("Shape fits perfectly on convex point twin side. Proceeding to place shape.")
+                                break
+                            else:
+                                pass
+                        else:
+                            break
+                    shape_to_place.rotate(180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point3 = rotate(point3, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point4 = rotate(point4, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point5 = rotate(point5, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    if not (combined_shape.covers(shape_to_place.polygon) or shape_to_place.polygon.covers(combined_shape) or combined_shape.buffer(-1e-4).intersects(shape_to_place.polygon)):
+                        if shape_to_place in convex_hole_filler_list:
+                            print(f"Placing convex hole filler shape: {shape_to_place.name}")
+                            if (shape_to_place in tier4_candidate_shapes or shape_to_place in tier2_candidate_shapes) and round(combined_shape_side_length, 2) == round(point3.distance(point4), 2):
+                                print("Shape fits perfectly on combined shape side. Proceeding to place shape.")
+                                if shape_to_place in tier2_candidate_shapes:
+                                    break
+                                elif shape_to_place in tier4_candidate_shapes and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                    print("Shape also fits perfectly on convex point twin side. Proceeding to place shape.")
+                                    break
+                                else:
+                                    pass
+                            elif (shape_to_place in tier3_candidate_shapes) and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                print("Shape fits perfectly on convex point twin side. Proceeding to place shape.")
+                                break
+                            else:
+                                pass
+                        else:
+                            break
+                    shape_to_place.rotate(180, origin=(combined_shape_side_midpoint.x, combined_shape_side_midpoint.y))
+                    point3 = rotate(point3, 180, origin=(combined_shape_side_midpoint.x, combined_shape_side_midpoint.y))
+                    point4 = rotate(point4, 180, origin=(combined_shape_side_midpoint.x, combined_shape_side_midpoint.y))
+                    point5 = rotate(point5, 180, origin=(combined_shape_side_midpoint.x, combined_shape_side_midpoint.y))
+                    shape_to_place_side_midpoint = rotate(shape_to_place_side_midpoint, 180, origin=(combined_shape_side_midpoint.x, combined_shape_side_midpoint.y))
+                    if not (combined_shape.covers(shape_to_place.polygon) or shape_to_place.polygon.covers(combined_shape) or combined_shape.buffer(-1e-2).intersects(shape_to_place.polygon)):
+                        if shape_to_place in convex_hole_filler_list:
+                            print(f"Placing convex hole filler shape: {shape_to_place.name}")
+                            if (shape_to_place in tier4_candidate_shapes or shape_to_place in tier2_candidate_shapes) and round(combined_shape_side_length, 2) == round(point3.distance(point4), 2):
+                                print("Shape fits perfectly on combined shape side. Proceeding to place shape.")
+                                if shape_to_place in tier2_candidate_shapes:
+                                    break
+                                elif shape_to_place in tier4_candidate_shapes and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                    print("Shape also fits perfectly on convex point twin side. Proceeding to place shape.")
+                                    break
+                                else:
+                                    pass
+                            elif (shape_to_place in tier3_candidate_shapes) and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                print("Shape fits perfectly on convex point twin side. Proceeding to place shape.")
+                                break
+                            else:
+                                pass
+                        else:
+                            break
+                    shape_to_place.rotate(180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point3 = rotate(point3, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point4 = rotate(point4, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    point5 = rotate(point5, 180, origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                    if not (combined_shape.covers(shape_to_place.polygon) or shape_to_place.polygon.covers(combined_shape) or combined_shape.buffer(-1e-4).intersects(shape_to_place.polygon)):
+                        if shape_to_place in convex_hole_filler_list:
+                            print(f"Placing convex hole filler shape: {shape_to_place.name}")
+                            if (shape_to_place in tier4_candidate_shapes or shape_to_place in tier2_candidate_shapes) and round(combined_shape_side_length, 2) == round(point3.distance(point4), 2):
+                                print("Shape fits perfectly on combined shape side. Proceeding to place shape.")
+                                if shape_to_place in tier2_candidate_shapes:
+                                    break
+                                elif shape_to_place in tier4_candidate_shapes and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                    print("Shape also fits perfectly on convex point twin side. Proceeding to place shape.")
+                                    break
+                                else:
+                                    pass
+                            elif (shape_to_place in tier3_candidate_shapes) and round(convex_point_twin_side_length, 2) == round(point4.distance(point5), 2):
+                                print("Shape fits perfectly on convex point twin side. Proceeding to place shape.")
+                                break
+                            else:
+                                pass
+                        else:
+                            break
+                    # if it overlaps, we try flipping the shape_to_place along the aligned line segment
+                    if rotation == 0:
+                        print("Flipping shape.")
+                        print(f"Coordinates before flipping: {shape_to_place.coordinates}")
+                        print(f"Midpoint before flipping: {shape_to_place_side_midpoint}")
+                        print(f"Line segment to flip around: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                        shape_to_place_side_angle = math.atan2(point4.y - point3.y, point4.x - point3.x)
+                        print(f"Shape to place side angle: {math.degrees(shape_to_place_side_angle)}")
+                        shape_to_place.rotate(math.degrees(-shape_to_place_side_angle), origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                        point5 = rotate(point5, math.degrees(-shape_to_place_side_angle), origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                        print(f"Coordinates after rotating to 0 degrees: {shape_to_place.coordinates}")
+                        shape_to_place.reflect(axis='x', origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                        point5 = rotate(point5, 180, origin=(point5.x, shape_to_place_side_midpoint.y))
+                        print(f"Coordinates after reflection: {shape_to_place.coordinates}")
+                        shape_to_place.rotate(math.degrees(shape_to_place_side_angle), origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                        point5 = rotate(point5, math.degrees(shape_to_place_side_angle), origin=(shape_to_place_side_midpoint.x, shape_to_place_side_midpoint.y))
+                        print(f"Coordinates after rotating back: {shape_to_place.coordinates}")
+                        print(f"Line segment points to: ({point3.x}, {point3.y}) to ({point4.x}, {point4.y})")
+                        print(f"Coordinates after flipping: {shape_to_place.coordinates}")
+
+                    # if all conditions are satisfied, we place the shape_to_place
+                if not (combined_shape.covers(shape_to_place.polygon) or shape_to_place.polygon.covers(combined_shape) or combined_shape.buffer(-1e-4).intersects(shape_to_place.polygon)):
+
+                    if num_of_convex_points >= 0:
+                        if shape_to_place in tier4_candidate_shapes:
+                            highest_tier_candidate_shape_achieved = 4
+                        elif (shape_to_place in tier3_candidate_shapes or shape_to_place in tier2_candidate_shapes) and highest_tier_candidate_shape_achieved < 4:
+                            highest_tier_candidate_shape_achieved = 2.5
+                        elif shape_to_place in tier1_candidate_shapes and highest_tier_candidate_shape_achieved < 2.5:
+                            highest_tier_candidate_shape_achieved = 1
+                        print(f"shape_to_place: {shape_to_place}")
+                        print(tier4_candidate_shapes)
+                        print(tier3_candidate_shapes)
+                        print(tier2_candidate_shapes)
+                        print(tier1_candidate_shapes)
+                        print(f"highest_tier_candidate_shape_achieved: {highest_tier_candidate_shape_achieved}")
+                    else:
+                        if (highest_tier_candidate_shape_achieved == 4 and shape_to_place in tier4_candidate_shapes) or (highest_tier_candidate_shape_achieved == 2.5 and (shape_to_place in tier3_candidate_shapes or shape_to_place in tier2_candidate_shapes)) or (highest_tier_candidate_shape_achieved == 1 and shape_to_place in tier1_candidate_shapes) or (highest_tier_candidate_shape_achieved == 0):
+                            # updating the combined shape
+                            print(f"Combined shape before union: {combined_shape}")
+                            print(f"Shape to place (not scaled): {shape_to_place.scaled(1.0, 1.0).polygon}")
+                            print(f"Shape to place (scaled): {shape_to_place.scaled(1.01, 1.01).polygon}")
+                            combined_shape = (combined_shape.buffer(1e-8).union(shape_to_place.polygon.buffer(1e-8)).buffer(-1e-8))
+                            combined_shape = combined_shape.buffer(0)
+                            combined_shape = snap(combined_shape, combined_shape, 1e-3)
+                            combined_shape = combined_shape.simplify(1e-3, preserve_topology=True)
+
+                            print(f"Combined shape after union: {combined_shape}")
+                            successfully_placed_shape = True
+                            if isinstance(combined_shape, MultiPolygon):
+                                graph_everything(final_shapes_list, .4, 'black', 'Could not place all shapes, something went wrong', loop)
+                            # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
+                            print(f"Placing shape: {shape_to_place.name}")
+                            print(f"final shapes list: {final_shapes_list}")
+                            print(f"shapes list: {shapes_list}")
+                            for shape in shapes_list:
+                                if shape_to_place.name == shape.name:
+                                    shapes_list.remove(shape)
+                                    break
+                            final_shapes_list.append(shape_to_place)
+                            break
+
+            if successfully_placed_shape:
+                print("hit 1")
+                break
+        if successfully_placed_shape:
+            print("hit 2")
+            break
+    if not successfully_placed_shape:
+        print("Could not place shape. Trying again with a new random_final_shape.\n\n\n")
+    else:
+        print(f"Successfully placed shape: {shape_to_place.name}\n\n")
+        shape_to_place = None
+if len(shapes_list) == 0:
+    print("All shapes placed successfully!")
+    combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
+    final_combined_shape_list = [combined_shape_obj]
+    graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
+    graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
+else:
+    print("Could not place all shapes, something went wrong. Try again")
+    print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
+    combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
+    graph_everything([combined_shape_obj], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
+    graph_everything(final_shapes_list, 0.9, 'red', f"Shapes remaining: {[shape.name for shape in shapes_list]}", loop)
