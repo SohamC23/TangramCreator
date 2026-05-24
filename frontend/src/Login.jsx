@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Logo } from "./constants";
+import { Logo } from "./Constants";
 
 export default function LoginModal({ onClose, onLogin }) {
   const [mode, setMode] = useState("signup");

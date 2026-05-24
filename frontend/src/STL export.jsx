@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { COLORS, getGraphBounds } from "./constants";
+import { COLORS, getGraphBounds } from "./Constants";
 
 export default function StlExport({ pieces }) {
   const preview = useMemo(() => {

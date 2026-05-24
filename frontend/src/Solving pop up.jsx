@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { COLORS, fmtTime } from "./constants";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { COLORS, fmtTime } from "./Constants";
 
 export default function SolverOverlay({ puzzle, pieces, onClose }) {
   const [seconds, setSeconds] = useState(0);
@@ -7,6 +7,28 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
   const [showSolution, setShowSolution] = useState(false);
   const [complete, setComplete] = useState(false);
   const timerRef = useRef(null);
+
+  const puzzleBounds = useMemo(() => {
+    const coords = puzzle?.shape || [];
+    if (!coords.length) return { minX: 0, minY: 0, width: 100, height: 100 };
+    const xs = coords.map(c => c[0]);
+    const ys = coords.map(c => c[1]);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    return {
+      minX,
+      minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    };
+  }, [puzzle]);
+
+  const normalizePoint = useMemo(() => {
+    const { minX, minY, height } = puzzleBounds;
+    return ([x, y]) => `${x - minX},${height - (y - minY)}`;
+  }, [puzzleBounds]);
 
   // Timer
   useEffect(() => {
@@ -55,10 +77,10 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
         <div className="solver-body">
           {/* Canvas */}
           <div className="solver-canvas">
-            <svg className="solver-svg" viewBox="0 0 100 100">
+            <svg className="solver-svg" viewBox={`0 0 ${puzzleBounds.width} ${puzzleBounds.height}`}>
               {showSolution || complete ? (
                 pieces.map((p, i) => {
-                  const pts = p.coords.map(c => `${c[0]},${100 - c[1]}`).join(" ");
+                  const pts = p.coords.map(c => normalizePoint(c)).join(" ");
                   return (
                     <polygon
                       key={i}
@@ -74,7 +96,7 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
               ) : (
                 <>
                   <polygon
-                    points={puzzle.shape.map(c => c.join(",")).join(" ")}
+                    points={puzzle.shape.map(c => normalizePoint(c)).join(" ")}
                     fill="none"
                     stroke="var(--c-text)"
                     strokeWidth="1.5"
@@ -85,7 +107,7 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
                   {[...placed].map(idx => {
                     const p = pieces[idx];
                     if (!p) return null;
-                    const pts = p.coords.map(c => `${c[0]},${100 - c[1]}`).join(" ");
+                    const pts = p.coords.map(c => normalizePoint(c)).join(" ");
                     return (
                       <polygon
                         key={idx}

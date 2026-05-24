@@ -1,4 +1,4 @@
-import { Logo } from "./constants";
+import { Logo } from "./Constants";
 
 export default function Header({ presets, activePresetIdx, onSwitchPreset, user, onLoginClick }) {
   return (

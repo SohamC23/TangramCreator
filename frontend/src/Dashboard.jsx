@@ -1,4 +1,4 @@
-import { COLORS } from "./constants";
+import { COLORS } from "./Constants";
 
 export default function Dashboard({
   pieces,

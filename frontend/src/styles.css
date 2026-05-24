@@ -470,9 +470,7 @@ main {
   grid-template-columns: 1fr 230px;
   gap: var(--space-lg);
 }
- 
-.creator-graph-col {}
- 
+
 .creator-side-col {
   display: flex;
   flex-direction: column;
