@@ -1,0 +1,397 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './styles.css'
+import App from './Header.jsx'
+
+createRoot(document.getElementById('root')).render(
+//  <!-- ═══════════════════════════════════════════════════════ -->
+//  <!-- LOGIN MODAL — initial state: hidden                    -->
+//  <!-- See: element-states/login-modal.html for all states    -->
+//  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="login-overlay" id="login-overlay">
+    <div class="login-modal">
+      <div class="login-logo">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+          <polygon points="2,2 12,2 2,12" fill="#6C5CE7"/>
+          <polygon points="12,2 22,2 22,12" fill="#00B894"/>
+          <polygon points="2,12 2,22 12,22" fill="#E17055"/>
+          <polygon points="12,12 22,12 12,22" fill="#0984E3"/>
+        </svg>
+      </div>
+      <h3 class="login-title">Save your progress</h3>
+      <p class="login-desc">Create a free account to save your custom piece sets and puzzle history across sessions.</p>
+      <input type="email" class="login-input" placeholder="Email address">
+      <input type="password" class="login-input" placeholder="Password">
+      <button class="login-submit">Create free account</button>
+      <p class="login-alt">Already have an account? <a href="#" class="login-link">Log in</a></p>
+      <a href="#" class="login-skip">Skip for now — I'll lose my presets when I leave</a>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SOLVER OVERLAY — initial state: hidden                 -->
+  <!-- See: element-states/solver-overlay.html for all states -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="solver-overlay" id="solver-overlay">
+    <div class="solver-modal">
+      <div class="solver-topbar">
+        <h3 class="solver-title">Puzzle #1</h3>
+        <button class="solver-close" aria-label="Close puzzle">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div class="solver-body">
+        <div class="solver-canvas">
+          <svg class="solver-svg" viewBox="0 0 300 300">
+            <polygon points="30,270 150,30 270,270" fill="none" stroke="var(--c-text)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4" opacity="0.4"/>
+          </svg>
+          <span class="solver-canvas-hint">Drag pieces from the right into the outline to solve</span>
+        </div>
+        <div class="solver-sidebar">
+          <h4 class="solver-sidebar-title">Pieces</h4>
+          <div class="solver-piece-list">
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#C8B6FF"></span>Large tri A
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#A78BFA"></span>Large tri B
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#6EE7B7"></span>Medium tri
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#FCA5A5"></span>Small tri A
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#FCD34D"></span>Small tri B
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#93C5FD"></span>Square
+            </div>
+            <div class="solver-piece">
+              <span class="solver-swatch" style="background:#F9A8D4"></span>Parallelogram
+            </div>
+          </div>
+          <div class="solver-controls">
+            <span class="solver-controls-label">Controls</span>
+            <div class="solver-controls-row">
+              <button class="btn-sm"><i class="ti ti-rotate"></i> Rotate</button>
+              <button class="btn-sm"><i class="ti ti-flip-horizontal"></i> Flip</button>
+            </div>
+            <button class="btn-sm btn-sm--full"><i class="ti ti-refresh"></i> Reset all pieces</button>
+          </div>
+          <div class="solver-solution-section">
+            <button class="btn-sm btn-sm--full"><i class="ti ti-eye"></i> Show solution</button>
+          </div>
+        </div>
+      </div>
+      <div class="solver-footer">
+        <div class="solver-timer-group">
+          <span class="solver-timer">00:00</span>
+          <span class="solver-timer-label">Solve time</span>
+        </div>
+        <div class="solver-actions">
+          <button class="btn-sm"><i class="ti ti-download"></i> Export SVG</button>
+          <button class="btn-primary btn-primary--sm">
+            <i class="ti ti-check"></i> Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- HEADER / TOP BAR                                       -->
+  <!-- See: element-states/header.html for all states         -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">
+        <svg class="logo-icon" width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <polygon points="2,2 12,2 2,12" fill="#6C5CE7"/>
+          <polygon points="12,2 22,2 22,12" fill="#00B894"/>
+          <polygon points="2,12 2,22 12,22" fill="#E17055"/>
+          <polygon points="12,12 22,12 12,22" fill="#0984E3"/>
+        </svg>
+        <span class="logo-text">TangramCreator</span>
+      </div>
+      <span class="logo-credit">Designed by Soham Chouhan</span>
+    </div>
+    <div class="topbar-right">
+      <div class="preset-selector">
+        <label class="preset-selector-label">Piece set:</label>
+        <select title = "Select a Preset" class="preset-selector-dropdown">
+          <option selected>Default tangram (7)</option>
+          <option>My triangles (4)</option>
+          <option>Preset 1 (9)</option>
+        </select>
+      </div>
+      <!-- initial state: logged out -->
+      <button class="btn-primary" id="login-trigger">
+        <i class="ti ti-user"></i> Sign up / Log in
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 1 — DASHBOARD                                  -->
+  <!-- Puzzles filtered by active preset                      -->
+  <!-- See: element-states/dashboard.html for all states      -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <main>
+  <section class="section" id="dashboard">
+    <h2 class="section-title">Dashboard</h2>
+    <p class="section-sub" id="piece-count-label">Using 7 pieces from Default tangram</p>
+
+    <button class="gen-btn" id="gen-btn">
+      <i class="ti ti-puzzle"></i> Generate puzzle
+    </button>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="stat-label">Puzzles generated</span>
+        <span class="stat-value">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Puzzles solved</span>
+        <span class="stat-value">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Current pieces</span>
+        <span class="stat-value">7</span>
+      </div>
+    </div>
+
+    <!-- initial state: no puzzles generated yet -->
+    <div class="empty-state" id="dashboard-empty">
+      <i class="ti ti-puzzle"></i>
+      <span>Hit the generate button to create your first puzzle.</span>
+    </div>
+
+    <!-- hidden initially — shown after first puzzle is generated -->
+    <!-- <div class="puzzle-scroll">
+      <div class="puzzle-grid">
+        ... puzzle tiles inserted here ...
+      </div>
+    </div> -->
+
+    <div class="section-nav">
+      <button class="btn-outline" id="scroll-to-creator">
+        <i class="ti ti-puzzle"></i>
+        Create custom pieces
+        <i class="ti ti-arrow-down"></i>
+      </button>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 2 — CREATE CUSTOM TANGRAM PIECES               -->
+  <!-- See: element-states/piece-creator.html for all states  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="section" id="creator">
+    <h2 class="section-title">Create custom tangram pieces</h2>
+    <p class="section-sub">Define piece shapes by entering polygon vertex coordinates.</p>
+
+    <div class="creator-layout">
+      <!-- LEFT: Graph -->
+      <div class="creator-graph-col">
+        <div class="graph-wrap">
+          <span class="graph-range-label">Graph range: -10 – 110</span>
+          <svg class="graph-svg" viewBox="0 0 400 400">
+            <rect x="0" y="0" width="400" height="400" fill="var(--c-surface)" rx="6"/>
+            <!-- Axis lines -->
+            <line x1="40" y1="360" x2="380" y2="360" stroke="var(--c-border)" stroke-width="0.5"/>
+            <line x1="40" y1="360" x2="40" y2="20" stroke="var(--c-border)" stroke-width="0.5"/>
+            <!-- Grid lines -->
+            <line x1="40" y1="190" x2="380" y2="190" stroke="var(--c-border-light)" stroke-width="0.5" stroke-dasharray="3 3"/>
+            <line x1="210" y1="20" x2="210" y2="360" stroke="var(--c-border-light)" stroke-width="0.5" stroke-dasharray="3 3"/>
+            <!-- Axis labels -->
+            <text class="graph-axis-label" x="40" y="376">0</text>
+            <text class="graph-axis-label" x="210" y="376">50</text>
+            <text class="graph-axis-label" x="375" y="376">100</text>
+            <text class="graph-axis-label" x="22" y="363">0</text>
+            <text class="graph-axis-label" x="22" y="193">50</text>
+            <text class="graph-axis-label" x="22" y="27">100</text>
+            <!-- Default tangram pieces rendered -->
+            <polygon points="40,360 210,20 125,190"      fill="#C8B6FF" stroke="#6C5CE7" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="210,20 380,360 295,190"      fill="#A78BFA" stroke="#6C5CE7" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="125,190 295,190 210,360"     fill="#6EE7B7" stroke="#059669" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="40,360 125,190 82,275"        fill="#FCA5A5" stroke="#DC2626" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="380,360 295,190 338,275"      fill="#FCD34D" stroke="#D97706" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="176,224 210,190 244,224 210,258" fill="#93C5FD" stroke="#2563EB" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+            <polygon points="82,275 125,190 210,190 167,275"  fill="#F9A8D4" stroke="#DB2777" stroke-width="1" opacity="0.7" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- RIGHT: Side panel -->
+      <div class="creator-side-col">
+
+        <!-- Name this preset -->
+        <div class="field-group">
+          <label class="field-label">Name this preset</label>
+          <input type="text" class="field-input" placeholder="e.g. My custom set">
+        </div>
+
+        <!-- Name this piece -->
+        <div class="field-group">
+          <label class="field-label">Name this piece</label>
+          <input type="text" class="field-input" placeholder="e.g. Large triangle">
+        </div>
+
+        <!-- Vertex coordinate inputs -->
+        <div class="field-group">
+          <label class="field-label">Vertices (x, y)</label>
+          <div class="coord-input-list">
+            <div class="coord-row">
+              <input type="number" class="coord-field" placeholder="x1">
+              <input type="number" class="coord-field" placeholder="y1">
+            </div>
+            <div class="coord-row">
+              <input type="number" class="coord-field" placeholder="x2">
+              <input type="number" class="coord-field" placeholder="y2">
+            </div>
+            <div class="coord-row">
+              <input type="number" class="coord-field" placeholder="x3">
+              <input type="number" class="coord-field" placeholder="y3">
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-sm"><i class="ti ti-plus"></i> Vertex</button>
+            <button class="btn-primary btn-primary--sm">
+              <i class="ti ti-check"></i> Update shape
+            </button>
+          </div>
+        </div>
+
+        <hr class="panel-divider">
+
+        <!-- Pieces in this set -->
+        <div class="field-group">
+          <label class="field-label">Pieces in this set (<span id="pc-count">7</span>)</label>
+          <select title = "Select a piece" class="field-select">
+            <option value="">Select a piece...</option>
+            <option>Large tri A</option>
+            <option>Large tri B</option>
+            <option>Medium tri</option>
+            <option>Small tri A</option>
+            <option>Small tri B</option>
+            <option>Square</option>
+            <option>Parallelogram</option>
+          </select>
+          <div class="btn-row">
+            <button class="btn-sm" disabled><i class="ti ti-copy"></i> Duplicate</button>
+            <button class="btn-sm btn-sm--danger" disabled><i class="ti ti-trash"></i> Delete</button>
+          </div>
+          <!-- Piece list -->
+          <div class="piece-list">
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#C8B6FF"></span>
+              <span class="piece-name">Large tri A</span>
+              <span class="piece-area">1250</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#A78BFA"></span>
+              <span class="piece-name">Large tri B</span>
+              <span class="piece-area">1250</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#6EE7B7"></span>
+              <span class="piece-name">Medium tri</span>
+              <span class="piece-area">1250</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#FCA5A5"></span>
+              <span class="piece-name">Small tri A</span>
+              <span class="piece-area">625</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#FCD34D"></span>
+              <span class="piece-name">Small tri B</span>
+              <span class="piece-area">625</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#93C5FD"></span>
+              <span class="piece-name">Square</span>
+              <span class="piece-area">400</span>
+            </div>
+            <div class="piece-item">
+              <span class="piece-swatch" style="background:#F9A8D4"></span>
+              <span class="piece-name">Parallelogram</span>
+              <span class="piece-area">950</span>
+            </div>
+          </div>
+        </div>
+
+        <hr class="panel-divider">
+
+        <!-- Presets -->
+        <div class="field-group">
+          <label class="field-label">Presets</label>
+          <div class="btn-row">
+            <button class="btn-sm"><i class="ti ti-device-floppy"></i> Save preset</button>
+          </div>
+          <div class="preset-list">
+            <div class="preset-item preset-item--active">
+              <span class="preset-name">Default tangram <span class="preset-badge">built-in</span></span>
+              <span class="preset-count">7</span>
+              <button class="preset-dup-btn" title="Duplicate preset"><i class="ti ti-copy"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-nav">
+      <button class="btn-outline" id="scroll-to-stl">
+        <i class="ti ti-3d-cube-sphere"></i>
+        Download STL file
+        <i class="ti ti-arrow-down"></i>
+      </button>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 3 — DOWNLOAD STL FOR 3D PRINTING               -->
+  <!-- See: element-states/stl-export.html for all states     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="section" id="stl-export">
+    <h2 class="section-title">Download STL for 3D printing</h2>
+    <div class="stl-card">
+      <div class="stl-preview">
+        <svg viewBox="0 0 100 100" width="90" height="90">
+          <polygon points="10,90 50,10 90,90" fill="#C8B6FF" stroke="#6C5CE7" stroke-width="1.5" stroke-linejoin="round"/>
+          <polygon points="25,90 50,40 75,90" fill="#A78BFA" stroke="#6C5CE7" stroke-width="0.8" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="stl-info">
+        <h3 class="stl-heading">Export current piece set</h3>
+        <p class="stl-desc">Generate an STL file of your <strong>7</strong> tangram pieces, ready for 3D printing.</p>
+        <div class="stl-options">
+          <label class="stl-option-label">
+            Thickness
+            <input type="number" class="stl-option-input" value="5" min="1" max="20">
+            mm
+          </label>
+          <label class="stl-option-label">
+            Scale
+            <input type="number" class="stl-option-input" value="100" min="50" max="300" step="10">
+            %
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary">
+            <i class="ti ti-download"></i> Download STL
+          </button>
+          <button class="btn-outline">
+            <i class="ti ti-file"></i> Download SVG
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+)
