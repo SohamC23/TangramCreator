@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { COLORS } from "./Constants";
-import { getGraphBounds } from "./HelperFunctions";
+import { COLORS } from "./helpers/Constants";
+import { getGraphBounds } from "./helpers/HelperFunctions";
 
 export default function StlExport({ pieces }) {
   const preview = useMemo(() => {

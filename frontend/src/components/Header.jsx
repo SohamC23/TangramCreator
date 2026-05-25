@@ -1,4 +1,4 @@
-import { Logo } from "./Logo";
+import { Logo } from "../assets/Logo";
 
 export default function Header({ presets, activePresetIdx, onSwitchPreset, user, onLoginClick }) {
   return (

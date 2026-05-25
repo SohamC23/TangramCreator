@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { COLORS } from "./Constants";
-import { polyArea, getGraphBounds, getGridTicks } from "./HelperFunctions";
+import { COLORS } from "./helpers/Constants";
+import { polyArea, getGraphBounds, getGridTicks } from "./helper/";
 
 export default function PieceCreator({
   pieces,

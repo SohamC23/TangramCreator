@@ -1,12 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
-import { DEFAULT_PIECES } from "./Constants";
-import { cloneDeep } from "./HelperFunctions";
-import Header from "./Header";
-import LoginModal from "./Login";
-import Dashboard from "./Dashboard";
-import PieceCreator from "./PieceCreator";
-import SolverOverlay from "./SolvingPopup";
-import StlExport from "./STLExport";
+import { DEFAULT_PIECES } from "./components/helpers/Constants";
+import { cloneDeep } from "./components/HelperFunctions";
+import Header from "./components/Header";
+import LoginModal from "./components/Login";
+import Dashboard from "./components/Dashboard";
+import PieceCreator from "./components/PieceCreator";
+import SolverOverlay from "./components/SolvingPopup";
+import StlExport from "./components/STLExport";
 import axios from "axios";
 
 

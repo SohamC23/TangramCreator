@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { COLORS } from "./Constants";
-import { fmtTime } from "./HelperFunctions";
+import { COLORS } from "./helpers/Constants";
+import { fmtTime } from "./helpers/HelperFunctions";
+import "./helpers/GeometryHelperFunctions"
 
 export default function SolverOverlay({ puzzle, pieces, onClose }) {
   const [seconds, setSeconds] = useState(0);

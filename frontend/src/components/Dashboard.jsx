@@ -1,4 +1,4 @@
-import { COLORS } from "./Constants";
+import { COLORS } from "./helpers/Constants";
 
 export default function Dashboard({
   pieces,
@@ -8,6 +8,27 @@ export default function Dashboard({
   onGenerate,
   onOpenSolver,
 }) {
+
+  function getPuzzleBounds(p) {
+    const coords = p?.shape || [];
+    if (!coords.length) {
+      return { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    coords.forEach(([x, y]) => {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    });
+    return { minX, minY, maxX, maxY };
+  };
+
   return (
     <section className="section">
       <h2 className="section-title">Dashboard</h2>
@@ -59,7 +80,7 @@ export default function Dashboard({
                 className="puzzle-tile"
                 onClick={() => onOpenSolver(p)}
               >
-                <svg viewBox="0 0 100 100">
+                <svg viewBox={`${getPuzzleBounds(p).minX} ${getPuzzleBounds(p).minY} ${getPuzzleBounds(p).maxX} ${getPuzzleBounds(p).maxY}`}>
                   <polygon
                     points={p.shape.map(c => c.join(",")).join(" ")}
                     fill={COLORS[p.num % COLORS.length].fill}
