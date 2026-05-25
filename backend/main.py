@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
-from typing import List, Optional
 
+from basemodels import GenerateTangramRequest
 import gramtan_generate as gg
 import gramtan_check_solved as gcs
 
@@ -20,18 +19,10 @@ app.add_middleware(
 )
 
 
-class ShapePayload(BaseModel):
-    name: str
-    coords: List[List[float]]
-
-
-class GenerateTangramRequest(BaseModel):
-    puzzlePieces: Optional[List[ShapePayload]] = None
-
 
 @app.post("/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
-    shapes = gcs.build_shapes(request.puzzlePieces)
+    shapes = gcs.build_shapes(request.shapes)
     try:
         tangram = gg.generate_puzzle(shapes, True)
     except Exception as exc:

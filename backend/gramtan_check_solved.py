@@ -3,7 +3,7 @@ import copy
 import xml.etree.ElementTree as ET
 import re
 
-from main import ShapePayload
+from basemodels import ShapePayload
 from gramtan_generate import Shape, DEFAULT_SHAPES_LIST
 
 

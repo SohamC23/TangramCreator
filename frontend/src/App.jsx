@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
-import { DEFAULT_PIECES, cloneDeep } from "./Constants";
+import { DEFAULT_PIECES } from "./Constants";
+import { cloneDeep } from "./HelperFunctions";
 import Header from "./Header";
 import LoginModal from "./Login";
 import Dashboard from "./Dashboard";
-import PieceCreator from "./Piece creator";
-import SolverOverlay from "./Solving pop up";
-import StlExport from "./STL export";
+import PieceCreator from "./PieceCreator";
+import SolverOverlay from "./SolvingPopup";
+import StlExport from "./STLExport";
 import axios from "axios";
 
 
@@ -143,12 +144,13 @@ export default function App() {
     setPresetName(presets[idx]?.builtIn ? "" : presets[idx]?.name || "");
   }, [presets]);
 
-const generatePuzzle = useCallback(async () => {
-  await axios.post(
-    "http://127.0.0.1:8000/api/generate-tangram", {
-    puzzlePieces: presets[activePresetIdx],
-  });
-}, [presets, activePresetIdx]);
+  const generatePuzzle = useCallback(async () => {
+    await axios.post("http://127.0.0.1:8000/api/generate-tangram", 
+      {
+        shapes: presets[activePresetIdx].pieces,
+      }
+    );
+  }, [presets, activePresetIdx]);
 
   async function getPuzzle() {
     const res = await axios.get("http://127.0.0.1:8000/api/get-tangram");
