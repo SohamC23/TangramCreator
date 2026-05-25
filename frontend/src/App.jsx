@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { DEFAULT_PIECES } from "./components/helpers/Constants";
-import { cloneDeep } from "./components/HelperFunctions";
+import { cloneDeep } from "./components/helpers/HelperFunctions";
 import Header from "./components/Header";
 import LoginModal from "./components/Login";
 import Dashboard from "./components/Dashboard";
