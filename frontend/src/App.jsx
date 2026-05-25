@@ -145,7 +145,7 @@ export default function App() {
   }, [presets]);
 
   const generatePuzzle = useCallback(async () => {
-    await axios.post("http://127.0.0.1:8000/api/generate-tangram", 
+    await axios.post("http://localhost:8000/api/generate-tangram", 
       {
         shapes: presets[activePresetIdx].pieces,
       }
@@ -153,7 +153,7 @@ export default function App() {
   }, [presets, activePresetIdx]);
 
   async function getPuzzle() {
-    const res = await axios.get("http://127.0.0.1:8000/api/get-tangram");
+    const res = await axios.get("http://localhost:8000/api/get-tangram");
     return res.data;
   }
 

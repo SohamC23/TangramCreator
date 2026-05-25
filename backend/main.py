@@ -12,7 +12,7 @@ app = FastAPI(title="Tangram Creator API")
 # Allow React frontend to connect and bypass CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:4173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,7 +20,7 @@ app.add_middleware(
 
 
 
-@app.post("/generate-tangram")
+@app.post("/api/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
     shapes = gcs.build_shapes(request.shapes)
     try:
@@ -41,7 +41,7 @@ def generate_tangram(request: GenerateTangramRequest):
     return gcs.last_tangram["serialized"]
 
 
-@app.get("/get-tangram")
+@app.get("/api/get-tangram")
 def get_tangram():
     if gcs.last_tangram["combined_shape"] is None:
         raise HTTPException(status_code=404, detail="No tangram has been generated yet")
@@ -74,5 +74,5 @@ def check_svg(svg: str = Query(..., description="SVG markup to check against the
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="127.0.0.1", port=8000)
+    uvicorn.run("main:app", host="localhost", port=8000)
 
