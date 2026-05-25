@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import re
 
 from main import ShapePayload
-from gramtan_generate import Shape, shapes_list as DEFAULT_SHAPES_LIST
+from gramtan_generate import Shape, DEFAULT_SHAPES_LIST
 
 
 last_tangram: dict = {
