@@ -145,22 +145,18 @@ export default function App() {
   }, [presets]);
 
   const generatePuzzle = useCallback(async () => {
-    await axios.post("http://localhost:8000/api/generate-tangram", 
+    const res = await axios.post("http://localhost:8000/api/generate-tangram", 
       {
         shapes: presets[activePresetIdx].pieces,
       }
     );
-  }, [presets, activePresetIdx]);
-
-  async function getPuzzle() {
-    const res = await axios.get("http://localhost:8000/api/get-tangram");
     return res.data;
-  }
+  }, [presets, activePresetIdx]);
 
   const createPuzzle = useCallback(async () => {
     if (!pieces.length) return;
-    await generatePuzzle();
-    const shape = await getPuzzle();
+    const result = await generatePuzzle();
+    const shape = result.combined_shape?.coordinates || [];
     const puzzle = { shape, presetIdx: activePresetIdx, num: allPuzzles.length + 1, id: Date.now() };
     setAllPuzzles(prev => [puzzle, ...prev]);
     setSolverPuzzle(puzzle);

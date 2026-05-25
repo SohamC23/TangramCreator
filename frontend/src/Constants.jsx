@@ -12,13 +12,13 @@ export const COLORS = [
 ];
 
 export const DEFAULT_PIECES = [
-  { name: "Large tri A", coords: [[0,0],[50,0],[25,50]], colorIdx: 0 },
-  { name: "Large tri B", coords: [[50,0],[100,0],[75,50]], colorIdx: 1 },
-  { name: "Medium tri", coords: [[25,50],[75,50],[50,100]], colorIdx: 2 },
-  { name: "Small tri A", coords: [[0,0],[25,50],[12,25]], colorIdx: 3 },
-  { name: "Small tri B", coords: [[100,0],[75,50],[88,25]], colorIdx: 4 },
-  { name: "Square", coords: [[40,40],[60,40],[60,60],[40,60]], colorIdx: 5 },
-  { name: "Parallelogram", coords: [[12,25],[25,50],[50,50],[38,25]], colorIdx: 6 },
+  { name: "Large tri A", coords: [[50,0],[50,50],[100,0]], colorIdx: 0 },
+  { name: "Large tri B", coords: [[50,75],[100,75],[100,25]], colorIdx: 1 },
+  { name: "Medium tri", coords: [[50,100],[75,125],[100,100]], colorIdx: 2 },
+  { name: "Small tri A", coords: [[0,0],[0,25],[25,0]], colorIdx: 3 },
+  { name: "Small tri B", coords: [[0,50],[25,25],[25,50]], colorIdx: 4 },
+  { name: "Square", coords: [[0,75],[0,100],[25,100],[25,75]], colorIdx: 5 },
+  { name: "Parallelogram", coords: [[50,100],[50,125],[75,150],[75,125]], colorIdx: 6 },
 ];
 
 /*

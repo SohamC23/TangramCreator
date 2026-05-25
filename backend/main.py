@@ -22,13 +22,17 @@ app.add_middleware(
 
 @app.post("/api/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
+    print("request before:", request)
     shapes = gcs.build_shapes(request.shapes)
+    print("shapes:", shapes)
     try:
-        tangram = gg.generate_puzzle(shapes, True)
+        tangram = gg.generate_puzzle(shapes, False)
+        print("tangram:", tangram)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
     if tangram is None:
+        print("Tangram generation failed: " + tangram)
         raise HTTPException(status_code=500, detail="Tangram generation failed")
 
     serialized = gcs.serialize_shape(tangram)

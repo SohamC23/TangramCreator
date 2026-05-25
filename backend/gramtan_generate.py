@@ -666,6 +666,7 @@ def generate_puzzle(shapes_list, showGraph):
         if (showGraph):
             graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
             graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
+        return combined_shape_obj
     else:
         print("Could not place all shapes, something went wrong. Try again")
         print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
@@ -673,3 +674,4 @@ def generate_puzzle(shapes_list, showGraph):
         if (showGraph):
             graph_everything([combined_shape_obj], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
             graph_everything(final_shapes_list, 0.9, 'red', f"Shapes remaining: {[shape.name for shape in shapes_list]}", loop)
+        return combined_shape_obj

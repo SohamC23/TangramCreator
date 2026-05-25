@@ -24,7 +24,7 @@ def build_shapes(shapes_payload: Optional[List[ShapePayload]]) -> List[Shape]:
     if shapes_payload is None:
         return [Shape(shape.name, shape.coordinates) for shape in copy.deepcopy(DEFAULT_SHAPES_LIST)]
 
-    return [Shape(item.name, item.coordinates) for item in shapes_payload]
+    return [Shape(item.name, item.coords) for item in shapes_payload]
 
 
 def _round_point(point: List[float], precision: int = 3) -> tuple[float, float]:
