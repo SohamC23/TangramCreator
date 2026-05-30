@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
 
 from basemodels import GenerateTangramRequest
+from basemodels import CheckSVGRequest
 import gramtan_generate as gg
 import gramtan_check_solved as gcs
 
@@ -19,15 +20,21 @@ app.add_middleware(
 )
 
 
-
 @app.post("/api/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
     print("request before:", request)
     shapes = gcs.build_shapes(request.shapes)
     print("shapes:", shapes)
     try:
-        tangram = gg.generate_puzzle(shapes, False)
-        print("tangram:", tangram)
+        tangramInfo = gg.generate_puzzle(shapes, False)
+        print("tangramInfo type:", type(tangramInfo))
+        print("tangramInfo[0] type:", type(tangramInfo[0]))
+        print("tangramInfo[0]:", tangramInfo[0])
+        print("tangramInfo[1] type:", type(tangramInfo[1]))
+        if tangramInfo[1]:
+            print("tangramInfo[1][0]:", tangramInfo[1][0])
+        tangram = tangramInfo[0]
+        solvedShapes = tangramInfo[1]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -36,43 +43,35 @@ def generate_tangram(request: GenerateTangramRequest):
         raise HTTPException(status_code=500, detail="Tangram generation failed")
 
     serialized = gcs.serialize_shape(tangram)
-    gcs.last_tangram["combined_shape"] = serialized
-    gcs.last_tangram["serialized"] = {
-        "combined_shape": serialized,
-        "original_shape_count": len(shapes),
-    }
-
-    return gcs.last_tangram["serialized"]
-
-
-@app.get("/api/get-tangram")
-def get_tangram():
-    if gcs.last_tangram["combined_shape"] is None:
-        raise HTTPException(status_code=404, detail="No tangram has been generated yet")
-    return gcs.last_tangram["serialized"]
-
-
-@app.get("/check-svg")
-def check_svg(svg: str = Query(..., description="SVG markup to check against the last generated tangram")):
-    if gcs.last_tangram["combined_shape"] is None:
-        raise HTTPException(status_code=404, detail="No tangram has been generated yet")
-
-    try:
-        polygons = gcs.extract_svg_polygons(svg)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    if not polygons:
-        raise HTTPException(status_code=400, detail="SVG did not contain any supported polygon or path data")
-
-    expected = gcs.last_tangram["combined_shape"]["coordinates"]
-    match = any(gcs._polygon_matches(expected, polygon) for polygon in polygons)
+    for i in range(0, len(solvedShapes)):
+        solvedShapes[i] = gcs.serialize_shape(solvedShapes[i])
 
     return {
-        "matches": match,
-        "expected_coordinate_count": len(expected),
-        "polygon_count": len(polygons),
+        "combined_shape": serialized,
+        "original_shape_count": len(shapes),
+        "solved_shapes": solvedShapes,
     }
+
+
+@app.post("/api/check-svg")
+def check_svg(request: CheckSVGRequest):
+
+    print("\n\ntrying to check solution\n\n")
+    print("DEBUG: placed_svg length:", len(request.placed_svg))
+    print("DEBUG: expected_svg length:", len(request.expected_svg))
+    print("DEBUG: placed_svg start:", request.placed_svg[:200])  # first 200 chars
+    print("DEBUG: expected_svg start:", request.expected_svg[:200])
+    
+    try:
+        result = gcs.check_svgs_match(request.placed_svg, request.expected_svg)
+    except ValueError as exc:
+        print("DEBUG: ValueError raised:", str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print("DEBUG: Unexpected error:", str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return result
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ export default function Dashboard({
   function getPuzzleBounds(p) {
     const coords = p?.shape || [];
     if (!coords.length) {
-      return { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+      return { minX: 0, minY: 0, maxX: 100, maxY: 100, pad: 0 };
     }
 
     let minX = Infinity;
@@ -26,7 +26,18 @@ export default function Dashboard({
       if (x > maxX) maxX = x;
       if (y > maxY) maxY = y;
     });
-    return { minX, minY, maxX, maxY };
+
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+    const pad = Math.max(width, height) * 0.08;
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      pad,
+    };
   };
 
   return (
@@ -74,24 +85,36 @@ export default function Dashboard({
       ) : (
         <div className="puzzle-scroll">
           <div className="puzzle-grid">
-            {puzzlesForPreset.map((p) => (
-              <div
-                key={p.id}
-                className="puzzle-tile"
-                onClick={() => onOpenSolver(p)}
-              >
-                <svg viewBox={`${getPuzzleBounds(p).minX} ${getPuzzleBounds(p).minY} ${getPuzzleBounds(p).maxX} ${getPuzzleBounds(p).maxY}`}>
-                  <polygon
-                    points={p.shape.map(c => c.join(",")).join(" ")}
-                    fill={COLORS[p.num % COLORS.length].fill}
-                    stroke={COLORS[p.num % COLORS.length].stroke}
-                    strokeWidth="1"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="puzzle-tile-label">Puzzle #{p.num}</span>
-              </div>
-            ))}
+            {puzzlesForPreset.map((p) => {
+              const bounds = getPuzzleBounds(p);
+              const viewMinX = bounds.minX - bounds.pad;
+              const viewMinY = bounds.minY - bounds.pad;
+              const viewWidth = (bounds.maxX - bounds.minX) + bounds.pad * 2;
+              const viewHeight = (bounds.maxY - bounds.minY) + bounds.pad * 2;
+              return (
+                <div
+                  key={p.id}
+                  className="puzzle-tile"
+                  onClick={() => onOpenSolver(p)}
+                >
+                  <svg
+                    viewBox={`${viewMinX} ${viewMinY} ${viewWidth} ${viewHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    <g transform={`translate(0, ${viewMinY * 2 + viewHeight}) scale(1, -1)`}>
+                      <polygon
+                        points={p.shape.map(c => c.join(",")).join(" ")}
+                        fill={COLORS[p.num % COLORS.length].fill}
+                        stroke={COLORS[p.num % COLORS.length].stroke}
+                        strokeWidth="1"
+                        strokeLinejoin="round"
+                      />
+                    </g>
+                  </svg>
+                  <span className="puzzle-tile-label">Puzzle #{p.num}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

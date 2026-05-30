@@ -662,16 +662,17 @@ def generate_puzzle(shapes_list, showGraph):
     if len(shapes_list) == 0:
         print("All shapes placed successfully!")
         combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
-        final_combined_shape_list = [combined_shape_obj]
         if (showGraph):
+            final_combined_shape_list = [combined_shape_obj]
             graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
             graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
-        return combined_shape_obj
+        return [combined_shape_obj, final_shapes_list]
     else:
         print("Could not place all shapes, something went wrong. Try again")
         print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
         combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
         if (showGraph):
+            final_combined_shape_list = [combined_shape_obj]
             graph_everything([combined_shape_obj], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
             graph_everything(final_shapes_list, 0.9, 'red', f"Shapes remaining: {[shape.name for shape in shapes_list]}", loop)
-        return combined_shape_obj
+        return [combined_shape_obj, final_shapes_list]

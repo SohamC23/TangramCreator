@@ -63,3 +63,20 @@ export function findSnap(movingIdx, movingCoords, allPlacedPieces, snapThreshold
  
   return bestDist < snapThreshold ? { dx: bestDx, dy: bestDy } : null;
 }
+
+export function findPuzzleSnap(pieceCoords, puzzleShape, threshold) {
+  // Check if any piece vertex is close to any puzzle vertex
+  for (let pCoord of pieceCoords) {
+    for (let qCoord of puzzleShape) {
+      const dist = Math.hypot(pCoord[0] - qCoord[0], pCoord[1] - qCoord[1]);
+      if (dist < threshold) {
+        // Snap to puzzle vertex
+        return {
+          dx: qCoord[0] - pCoord[0],
+          dy: qCoord[1] - pCoord[1],
+        };
+      }
+    }
+  }
+  return null;
+}

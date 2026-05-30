@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { DEFAULT_PIECES } from "./components/helpers/Constants";
 import { cloneDeep } from "./components/helpers/HelperFunctions";
 import Header from "./components/Header";
@@ -53,6 +53,17 @@ export default function App() {
   /* ── Solver ────────────────────────────────────────── */
   const [solverOpen, setSolverOpen] = useState(false);
   const [solverPuzzle, setSolverPuzzle] = useState(null);
+  const [solverComplete, setSolverComplete] = useState(false);
+  const [solverFeedback, setSolverFeedback] = useState("");
+  const feedbackTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   /* ── Handlers ──────────────────────────────────────── */
 
@@ -157,19 +168,61 @@ export default function App() {
     if (!pieces.length) return;
     const result = await generatePuzzle();
     const shape = result.combined_shape?.coordinates || [];
-    const puzzle = { shape, presetIdx: activePresetIdx, num: allPuzzles.length + 1, id: Date.now() };
+    const solvedShapes = result.solved_shapes || [];
+    const puzzle = {
+      shape,
+      presetIdx: activePresetIdx,
+      solvedShapes,
+      num: allPuzzles.length + 1,
+      id: Date.now(),
+    };
     setAllPuzzles(prev => [puzzle, ...prev]);
     setSolverPuzzle(puzzle);
+    setSolverComplete(false);
+    setSolverFeedback("");
     setSolverOpen(true);
   }, [pieces.length, generatePuzzle, activePresetIdx, allPuzzles.length]);
 
   const openSolver = useCallback((puzzle) => {
     setSolverPuzzle(puzzle);
+    setSolverComplete(false);
+    setSolverFeedback("");
     setSolverOpen(true);
   }, []);
 
   const closeSolver = useCallback(() => {
     setSolverOpen(false);
+  }, []);
+
+  /* ── Check Solved: POST both SVGs to backend ─────── */
+  const handleCheckSolved = useCallback(async (placedSvg, expectedSvg) => {
+    try {
+      const res = await axios.post("http://localhost:8000/api/check-svg", {
+        placed_svg: placedSvg,
+        expected_svg: expectedSvg,
+      });
+      if (res.data.matches) {
+        setSolverComplete(true);
+        setSolverFeedback("");
+      } else {
+        if (feedbackTimeoutRef.current) {
+          clearTimeout(feedbackTimeoutRef.current);
+        }
+        setSolverFeedback("Puzzle isn't solved yet, keep trying!");
+        feedbackTimeoutRef.current = setTimeout(() => {
+          setSolverFeedback("");
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Check failed:", err);
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+      setSolverFeedback("Error checking solution. Try again.");
+      feedbackTimeoutRef.current = setTimeout(() => {
+        setSolverFeedback("");
+      }, 3000);
+    }
   }, []);
 
   const solverPieces = solverPuzzle
@@ -193,11 +246,17 @@ export default function App() {
 
       {/* Solver Overlay */}
       {solverOpen && solverPuzzle && (
-        <SolverOverlay
-          puzzle={solverPuzzle}
-          pieces={solverPieces}
-          onClose={closeSolver}
-        />
+        <>
+          <SolverOverlay
+            puzzle={solverPuzzle}
+            pieces={solverPieces}
+            solvedShapes={solverPuzzle.solvedShapes || []}
+            isComplete={solverComplete}
+            onCheckSolved={handleCheckSolved}
+            feedbackMessage={solverFeedback}
+            onClose={closeSolver}
+          />
+        </>
       )}
 
       {/* Header */}

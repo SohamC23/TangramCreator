@@ -9,3 +9,8 @@ class ShapePayload(BaseModel):
 
 class GenerateTangramRequest(BaseModel):
     shapes: Optional[List[ShapePayload]] = None
+
+
+class CheckSVGRequest(BaseModel):
+    placed_svg: str
+    expected_svg: str

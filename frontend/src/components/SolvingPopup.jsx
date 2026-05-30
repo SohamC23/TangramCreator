@@ -1,16 +1,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { COLORS } from "./helpers/Constants";
 import { fmtTime } from "./helpers/HelperFunctions";
-import { getCenter, translateCoords, findSnap, rotateCoords, flipCoords } from "./helpers/GeometryHelperFunctions"
+import { getCenter, translateCoords, findSnap, findPuzzleSnap, rotateCoords, flipCoords } from "./helpers/GeometryHelperFunctions"
 
-export default function SolverOverlay({ puzzle, pieces, onClose }) {
+export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isComplete, onCheckSolved, feedbackMessage = "", onClose }) {
   const [seconds, setSeconds] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
-  const [complete, setComplete] = useState(false);
   const timerRef = useRef(null);
   const svgRef = useRef(null);
 
-  // Each placed piece: { idx, coords (in SVG space), zOrder }
+  // Each placed piece: { idx, coords (in math space), zOrder }
   const [placedPieces, setPlacedPieces] = useState([]);
   const [nextZ, setNextZ] = useState(1);
 
@@ -18,17 +17,16 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
   const [activePieceIdx, setActivePieceIdx] = useState(null);
 
   // Drag state
-  const [dragging, setDragging] = useState(null); // { idx, startMouse, startCoords }
+  const [dragging, setDragging] = useState(null);
 
-  // Snap threshold in SVG units (approx 3mm — we'll scale relative to puzzle size)
+  // Snap threshold in SVG units (approx 3mm — scale relative to puzzle size)
   const SNAP_THRESHOLD = useMemo(() => {
     const coords = puzzle?.shape || [];
     if (!coords.length) return 3;
     const xs = coords.map(c => c[0]);
     const ys = coords.map(c => c[1]);
     const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    // 3mm relative to puzzle — assume puzzle prints at ~100mm, so 3% of size
-    return size * 0.03;
+    return size * 0.04;
   }, [puzzle]);
 
   // Puzzle bounds for viewBox
@@ -43,9 +41,9 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     const maxY = Math.max(...ys);
     const w = Math.max(1, maxX - minX);
     const h = Math.max(1, maxY - minY);
-    // Add 20% padding so pieces can be dragged outside the outline
-    const padX = w * 0.2;
-    const padY = h * 0.2;
+    const paddingFactor = 0.25;
+    const padX = w * paddingFactor;
+    const padY = h * paddingFactor;
     return {
       minX: minX - padX,
       minY: minY - padY,
@@ -56,10 +54,7 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     };
   }, [puzzle]);
 
-  // Convert SVG coords to viewBox-flipped coords (Y is flipped for screen)
-  // In our SVG, y=0 is top. Puzzle coords use math convention (y up).
-  // We flip: screenY = (puzzleBounds.minY + puzzleBounds.height) - mathY + puzzleBounds.minY
-  // Simplification: screenY = topOfViewBox + height - (mathY - minY) = we just negate
+  // Convert math coords to screen SVG coords (flip Y)
   const toScreenSimple = useCallback(([x, y]) => {
     return [x, 2 * puzzleBounds.minY + puzzleBounds.height - y];
   }, [puzzleBounds]);
@@ -69,11 +64,18 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
 
   /* ── Timer ───────────────────────────────────────── */
   useEffect(() => {
-    if (!complete && !showSolution) {
+    if (!isComplete && !showSolution) {
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     }
     return () => clearInterval(timerRef.current);
-  }, [complete, showSolution]);
+  }, [isComplete, showSolution]);
+
+  // Stop timer when complete
+  useEffect(() => {
+    if (isComplete) {
+      clearInterval(timerRef.current);
+    }
+  }, [isComplete]);
 
   /* ── Mouse → SVG coordinate conversion ───────────── */
   const clientToSVG = useCallback((clientX, clientY) => {
@@ -88,7 +90,7 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
 
   /* ── Summon piece to center of puzzle ────────────── */
   const summonPiece = useCallback((pieceIdx) => {
-    if (complete) return;
+    if (isComplete) return;
 
     // If already placed, remove it (un-place)
     if (placedIdxSet.has(pieceIdx)) {
@@ -100,7 +102,6 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     const piece = pieces[pieceIdx];
     if (!piece) return;
 
-    // Center the piece at the puzzle center (in math coords)
     const [pcx, pcy] = getCenter(piece.coords);
     const dx = puzzleBounds.centerX - pcx;
     const dy = puzzleBounds.centerY - pcy;
@@ -111,11 +112,11 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
 
     setPlacedPieces(prev => [...prev, { idx: pieceIdx, coords: centeredCoords, zOrder: z }]);
     setActivePieceIdx(pieceIdx);
-  }, [complete, pieces, placedIdxSet, puzzleBounds, nextZ, activePieceIdx]);
+  }, [isComplete, pieces, placedIdxSet, puzzleBounds, nextZ, activePieceIdx]);
 
   /* ── Drag handlers ───────────────────────────────── */
   const onPieceMouseDown = useCallback((e, pieceIdx) => {
-    if (complete) return;
+    if (isComplete) return;
     e.stopPropagation();
     e.preventDefault();
 
@@ -123,7 +124,6 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     const placed = placedPieces.find(p => p.idx === pieceIdx);
     if (!placed) return;
 
-    // Bring to top
     const z = nextZ;
     setNextZ(z + 1);
     setPlacedPieces(prev =>
@@ -136,37 +136,28 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
       startMouse: [mx, my],
       startCoords: placed.coords.map(c => [...c]),
     });
-  }, [complete, clientToSVG, placedPieces, nextZ]);
+  }, [isComplete, clientToSVG, placedPieces, nextZ]);
 
   const onMouseMove = useCallback((e) => {
     if (!dragging) return;
 
     const [mx, my] = clientToSVG(e.clientX, e.clientY);
-    // In screen-space SVG: moving down = increasing screenY.
-    // Our coords are in math space, but we store them in math space and
-    // convert to screen only for rendering. So drag delta in screen space
-    // needs to be converted: dx is same, dy is negated (screen down = math down in our flip).
     const dxScreen = mx - dragging.startMouse[0];
     const dyScreen = my - dragging.startMouse[1];
-    // Since toScreen flips Y, a screen-space downward movement (positive dy)
-    // corresponds to a negative math-Y movement. But since we're working
-    // purely in screen coords for the drag (startMouse is in screen SVG coords),
-    // we translate in screen space and store screen coords... 
-    // Actually, let's keep it simple: store coords in MATH space, convert on render.
-    // Drag delta in screen SVG: dxScreen, dyScreen.
-    // In math space: dx = dxScreen, dy = -dyScreen (because Y is flipped).
     const dxMath = dxScreen;
     const dyMath = -dyScreen;
 
     let newCoords = translateCoords(dragging.startCoords, dxMath, dyMath);
 
-    // Snap check
-    const snap = findSnap(
-      dragging.idx,
-      newCoords,
-      placedPieces.filter(p => p.idx !== dragging.idx),
-      SNAP_THRESHOLD
-    );
+    let snap = findPuzzleSnap(newCoords, puzzle.shape, SNAP_THRESHOLD);
+    if (!snap) {
+      snap = findSnap(
+        dragging.idx,
+        newCoords,
+        placedPieces.filter(p => p.idx !== dragging.idx),
+        SNAP_THRESHOLD
+      );
+    }
     if (snap) {
       newCoords = translateCoords(newCoords, snap.dx, snap.dy);
     }
@@ -174,13 +165,12 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     setPlacedPieces(prev =>
       prev.map(p => p.idx === dragging.idx ? { ...p, coords: newCoords } : p)
     );
-  }, [dragging, clientToSVG, placedPieces, SNAP_THRESHOLD]);
+  }, [dragging, clientToSVG, puzzle.shape, SNAP_THRESHOLD, placedPieces]);
 
   const onMouseUp = useCallback(() => {
     setDragging(null);
   }, []);
 
-  // Attach move/up to window so drag works outside SVG
   useEffect(() => {
     if (dragging) {
       window.addEventListener("mousemove", onMouseMove);
@@ -194,25 +184,25 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
 
   /* ── Rotate active piece 45° CW ──────────────────── */
   const rotateActive = useCallback(() => {
-    if (activePieceIdx == null || complete) return;
+    if (activePieceIdx == null || isComplete) return;
     setPlacedPieces(prev =>
       prev.map(p => {
         if (p.idx !== activePieceIdx) return p;
         return { ...p, coords: rotateCoords(p.coords, 45) };
       })
     );
-  }, [activePieceIdx, complete]);
+  }, [activePieceIdx, isComplete]);
 
   /* ── Flip active piece across vertical center ────── */
   const flipActive = useCallback(() => {
-    if (activePieceIdx == null || complete) return;
+    if (activePieceIdx == null || isComplete) return;
     setPlacedPieces(prev =>
       prev.map(p => {
         if (p.idx !== activePieceIdx) return p;
         return { ...p, coords: flipCoords(p.coords) };
       })
     );
-  }, [activePieceIdx, complete]);
+  }, [activePieceIdx, isComplete]);
 
   /* ── Reset ───────────────────────────────────────── */
   const reset = () => {
@@ -220,20 +210,32 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
     setNextZ(1);
     setActivePieceIdx(null);
     setShowSolution(false);
-    setComplete(false);
-    setSeconds(0);
     setDragging(null);
   };
 
-  /* ── Completion check ────────────────────────────── */
-  const isComplete =
-    pieces.length > 0 && placedPieces.length === pieces.length;
+  /* ── Build SVG strings and trigger check ─────────── */
+  const handleCheckSolved = useCallback(() => {
 
-  useEffect(() => {
-    if (isComplete) {
-      clearInterval(timerRef.current);
-    }
-  }, [isComplete]);
+    if (placedPieces.length === 0 || !onCheckSolved) return;
+
+    const vb = `${puzzleBounds.minX} ${puzzleBounds.minY} ${puzzleBounds.width} ${puzzleBounds.height}`;
+
+    // Build placed pieces SVG
+    const placedPolygons = [...placedPieces]
+      .sort((a, b) => a.zOrder - b.zOrder)
+      .map(({ coords: pCoords }) => {
+        const pts = pCoords.map(c => toScreenSimple(c).join(",")).join(" ");
+        return `<polygon points="${pts}" />`;
+      })
+      .join("");
+    const placedSvg = `<svg viewBox="${vb}">${placedPolygons}</svg>`;
+
+    // Build expected (combined shape outline) SVG
+    const expectedPts = puzzle.shape.map(c => toScreenSimple(c).join(",")).join(" ");
+    const expectedSvg = `<svg viewBox="${vb}"><polygon points="${expectedPts}" /></svg>`;
+
+    onCheckSolved(placedSvg, expectedSvg);
+  }, [placedPieces, puzzleBounds, puzzle.shape, toScreenSimple, onCheckSolved]);
 
   const timerLabel = isComplete
     ? "Solve time — complete!"
@@ -270,19 +272,16 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
               style={{ cursor: dragging ? "grabbing" : "default" }}
             >
               {showSolution ? (
-                // Show solution: render all pieces at their original positions, centered
-                pieces.map((p, i) => {
-                  const [pcx, pcy] = getCenter(p.coords);
-                  const dx = puzzleBounds.centerX - pcx;
-                  const dy = puzzleBounds.centerY - pcy;
-                  const centered = translateCoords(p.coords, dx, dy);
-                  const pts = centered.map(c => toScreenSimple(c).join(",")).join(" ");
+                (solvedShapes.length ? solvedShapes : pieces).map((shape, i) => {
+                  const coords = shape.coordinates || shape.coords || [];
+                  if (!coords || coords.length === 0) return null;
+                  const pts = coords.map(c => toScreenSimple(c).join(",")).join(" ");
                   return (
                     <polygon
                       key={`sol-${i}`}
                       points={pts}
-                      fill={COLORS[p.colorIdx % COLORS.length].fill}
-                      stroke={COLORS[p.colorIdx % COLORS.length].stroke}
+                      fill={COLORS[i % COLORS.length].fill}
+                      stroke={COLORS[i % COLORS.length].stroke}
                       strokeWidth="0.8"
                       opacity="0.85"
                       strokeLinejoin="round"
@@ -316,7 +315,7 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
                         strokeWidth={isActive ? 2 : 0.8}
                         opacity="0.85"
                         strokeLinejoin="round"
-                        style={{ cursor: complete ? "default" : "grab" }}
+                        style={{ cursor: isComplete ? "default" : "grab" }}
                         onMouseDown={e => onPieceMouseDown(e, idx)}
                       />
                     );
@@ -325,13 +324,13 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
               )}
             </svg>
 
-            {!complete && !showSolution && placedPieces.length === 0 && (
+            {!isComplete && !showSolution && placedPieces.length === 0 && (
               <span className="solver-canvas-hint">
                 Click pieces on the right to place them, then drag to position
               </span>
             )}
 
-            {complete && (
+            {isComplete && (
               <div className="solver-complete-badge">
                 <span className="solver-complete-icon">
                   <i className="ti ti-check" />
@@ -364,25 +363,25 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
               })}
             </div>
 
-            <div className="solver-controls">
+              <div className="solver-controls">
               <span className="solver-controls-label">Controls</span>
               <div className="solver-controls-row">
                 <button
                   className="btn-sm"
                   onClick={rotateActive}
-                  disabled={activePieceIdx == null || complete}
+                  disabled={activePieceIdx == null || isComplete}
                 >
                   <i className="ti ti-rotate" /> Rotate
                 </button>
                 <button
                   className="btn-sm"
                   onClick={flipActive}
-                  disabled={activePieceIdx == null || complete}
+                  disabled={activePieceIdx == null || isComplete}
                 >
                   <i className="ti ti-flip-horizontal" /> Flip
                 </button>
               </div>
-              <button className="btn-sm btn-sm--full" onClick={reset}>
+              <button className="btn-sm btn-sm--full" onClick={reset} disabled={isComplete}>
                 <i className="ti ti-refresh" /> Reset all pieces
               </button>
             </div>
@@ -391,10 +390,18 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
               <button
                 className="btn-sm btn-sm--full"
                 onClick={() => setShowSolution(!showSolution)}
-                disabled={complete}
+                disabled={isComplete}
               >
                 <i className={`ti ti-${showSolution ? "eye-off" : "eye"}`} />
                 {showSolution ? " Hide solution" : " Show solution"}
+              </button>
+              <button
+                className="btn-sm btn-sm--full"
+                onClick={() => { handleCheckSolved(); }}
+                disabled={placedPieces.length !== pieces.length || isComplete}
+                style={{ marginTop: "6px" }}
+              >
+                <i className="ti ti-circle-check" /> Check Solved
               </button>
             </div>
           </div>
@@ -405,6 +412,9 @@ export default function SolverOverlay({ puzzle, pieces, onClose }) {
           <div className="solver-timer-group">
             <span className="solver-timer">{fmtTime(seconds)}</span>
             <span className="solver-timer-label">{timerLabel}</span>
+            {feedbackMessage && (
+              <span className="solver-feedback">{feedbackMessage}</span>
+            )}
           </div>
           <div className="solver-actions">
             <button className="btn-sm">

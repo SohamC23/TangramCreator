@@ -3,6 +3,9 @@ import copy
 import xml.etree.ElementTree as ET
 import re
 
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+
 from basemodels import ShapePayload
 from gramtan_generate import Shape, DEFAULT_SHAPES_LIST
 
@@ -27,39 +30,22 @@ def build_shapes(shapes_payload: Optional[List[ShapePayload]]) -> List[Shape]:
     return [Shape(item.name, item.coords) for item in shapes_payload]
 
 
-def _round_point(point: List[float], precision: int = 3) -> tuple[float, float]:
-    return round(point[0], precision), round(point[1], precision)
-
-
-def _points_close(p1: List[float], p2: List[float], tol: float = 1e-2) -> bool:
-    return abs(p1[0] - p2[0]) <= tol and abs(p1[1] - p2[1]) <= tol
-
-
-def _polygon_matches(expected: List[List[float]], actual: List[List[float]], tol: float = 1e-2) -> bool:
-    if len(expected) != len(actual):
-        return False
-
-    unmatched = actual.copy()
-    for pt in expected:
-        found = False
-        for candidate in unmatched:
-            if _points_close(pt, candidate, tol):
-                unmatched.remove(candidate)
-                found = True
-                break
-        if not found:
-            return False
-    return True
-
-
 def parse_polygon_points(points_str: str) -> List[List[float]]:
-    numbers = re.findall(r"-?\d*\.?\d+", points_str)
-    coords = [float(value) for value in numbers]
+    """Parse SVG polygon points attribute into coordinate pairs."""
+    numbers = re.findall(r"-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?", points_str)
+    coords = [float(value) for value in numbers if value.strip()]
+
+    if len(coords) < 6:
+        raise ValueError("Polygon points must include at least three coordinate pairs.")
+    if len(coords) % 2 != 0:
+        raise ValueError("Polygon points string contains an incomplete coordinate pair.")
+
     return [[coords[i], coords[i + 1]] for i in range(0, len(coords), 2)]
 
 
 def parse_svg_path(d: str) -> List[List[float]]:
-    tokens = re.findall(r"[MmLlHhVvZz]|-?\d*\.?\d+", d)
+    """Parse SVG path d attribute into coordinate pairs."""
+    tokens = re.findall(r"[MmLlHhVvZz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?", d)
     points: List[List[float]] = []
     x = y = 0.0
     command = None
@@ -73,6 +59,8 @@ def parse_svg_path(d: str) -> List[List[float]]:
             continue
 
         if command in ("M", "L"):
+            if i + 1 >= len(tokens):
+                raise ValueError("SVG path contains an incomplete coordinate pair.")
             x = float(token)
             y = float(tokens[i + 1])
             points.append([x, y])
@@ -100,6 +88,7 @@ def parse_svg_path(d: str) -> List[List[float]]:
 
 
 def extract_svg_polygons(svg_data: str) -> List[List[List[float]]]:
+    """Extract all polygon/path coordinate lists from an SVG string."""
     try:
         root = ET.fromstring(svg_data)
     except ET.ParseError as exc:
@@ -116,3 +105,67 @@ def extract_svg_polygons(svg_data: str) -> List[List[List[float]]]:
                 polygons.append(parsed_points)
 
     return polygons
+
+
+def svg_to_union(svg_data: str) -> Polygon:
+    """Parse an SVG string, extract all polygons, and union them into one shape."""
+    polygon_coords = extract_svg_polygons(svg_data)
+
+    if not polygon_coords:
+        raise ValueError("SVG did not contain any supported polygon or path data")
+
+    shapely_polys = []
+    for coords in polygon_coords:
+        if len(coords) >= 3:
+            try:
+                poly = Polygon(coords)
+                if poly.is_valid and poly.area > 0:
+                    shapely_polys.append(poly)
+            except Exception:
+                continue
+
+    if not shapely_polys:
+        raise ValueError("No valid polygons could be constructed from SVG data")
+
+    return unary_union(shapely_polys)
+
+
+def check_svgs_match(placed_svg: str, expected_svg: str, tolerance: float = 0.01) -> dict:
+    """
+    Compare two SVGs by unioning all polygons in each, then computing
+    the symmetric difference. If neither shape has significant area
+    outside the other, they match.
+
+    Returns a dict with:
+        - matches: bool
+        - placed_area: float
+        - expected_area: float
+        - symmetric_difference_area: float
+        - ratio: float (sym_diff / expected — 0.0 = perfect match)
+    """
+    placed_union = svg_to_union(placed_svg)
+    expected_union = svg_to_union(expected_svg)
+
+    placed_area = placed_union.area
+    expected_area = expected_union.area
+
+    if expected_area == 0:
+        return {
+            "matches": False,
+            "placed_area": placed_area,
+            "expected_area": 0,
+            "symmetric_difference_area": placed_area,
+            "ratio": float("inf"),
+        }
+
+    sym_diff = placed_union.symmetric_difference(expected_union)
+    sym_diff_area = sym_diff.area
+    ratio = sym_diff_area / expected_area
+
+    return {
+        "matches": ratio < tolerance,
+        "placed_area": round(placed_area, 4),
+        "expected_area": round(expected_area, 4),
+        "symmetric_difference_area": round(sym_diff_area, 4),
+        "ratio": round(ratio, 6),
+    }
