@@ -64,10 +64,20 @@ export function findSnap(movingIdx, movingCoords, allPlacedPieces, snapThreshold
   return bestDist < snapThreshold ? { dx: bestDx, dy: bestDy } : null;
 }
 
+export function parsePuzzleShapeVertices(puzzleShape) {
+  if (!puzzleShape) return [];
+  if (Array.isArray(puzzleShape)) return puzzleShape;
+  if (Array.isArray(puzzleShape.coordinates)) return puzzleShape.coordinates;
+  if (Array.isArray(puzzleShape.exteriors)) return puzzleShape.exteriors.flat();
+  if (Array.isArray(puzzleShape.holes)) return puzzleShape.holes.flat();
+  return [];
+}
+
 export function findPuzzleSnap(pieceCoords, puzzleShape, threshold) {
+  const puzzleCoords = parsePuzzleShapeVertices(puzzleShape);
   // Check if any piece vertex is close to any puzzle vertex
   for (let pCoord of pieceCoords) {
-    for (let qCoord of puzzleShape) {
+    for (let qCoord of puzzleCoords) {
       const dist = Math.hypot(pCoord[0] - qCoord[0], pCoord[1] - qCoord[1]);
       if (dist < threshold) {
         // Snap to puzzle vertex

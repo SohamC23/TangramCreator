@@ -9,8 +9,42 @@ export default function Dashboard({
   onOpenSolver,
 }) {
 
+  function getShapeRings(shape) {
+    if (!shape) return [];
+    if (Array.isArray(shape)) return [shape];
+    if (Array.isArray(shape.exteriors)) return shape.exteriors;
+    if (Array.isArray(shape.coordinates)) return [shape.coordinates];
+    return [];
+  }
+
+  function getShapeHoles(shape) {
+    if (!shape) return [];
+    if (Array.isArray(shape.holes)) return shape.holes;
+    if (Array.isArray(shape.hole_coordinates)) return shape.hole_coordinates;
+    return [];
+  }
+
+  function getShapeVertices(shape) {
+    return [...getShapeRings(shape).flat(), ...getShapeHoles(shape).flat()];
+  }
+
+  function buildShapePath(shape) {
+    const rings = [...getShapeRings(shape), ...getShapeHoles(shape)];
+    if (!rings.length) return "";
+
+    return rings
+      .filter(ring => Array.isArray(ring) && ring.length)
+      .map((ring) => {
+        const [first, ...rest] = ring;
+        const moved = `M ${first[0]} ${first[1]}`;
+        const lines = rest.map(([x, y]) => `L ${x} ${y}`);
+        return [moved, ...lines, "Z"].join(" ");
+      })
+      .join(" ");
+  }
+
   function getPuzzleBounds(p) {
-    const coords = p?.shape || [];
+    const coords = getShapeVertices(p?.shape);
     if (!coords.length) {
       return { minX: 0, minY: 0, maxX: 100, maxY: 100, pad: 0 };
     }
@@ -102,12 +136,13 @@ export default function Dashboard({
                     preserveAspectRatio="xMidYMid meet"
                   >
                     <g transform={`translate(0, ${viewMinY * 2 + viewHeight}) scale(1, -1)`}>
-                      <polygon
-                        points={p.shape.map(c => c.join(",")).join(" ")}
+                      <path
+                        d={buildShapePath(p.shape)}
                         fill={COLORS[p.num % COLORS.length].fill}
                         stroke={COLORS[p.num % COLORS.length].stroke}
                         strokeWidth="1"
                         strokeLinejoin="round"
+                        fillRule="evenodd"
                       />
                     </g>
                   </svg>

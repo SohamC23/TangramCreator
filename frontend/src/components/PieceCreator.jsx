@@ -18,7 +18,6 @@ export default function PieceCreator({
   onUpdateShape,
   onDeletePiece,
   onDuplicatePiece,
-  onSavePreset,
   onDuplicatePreset,
   onSwitchPreset,
 }) {
@@ -207,8 +206,8 @@ export default function PieceCreator({
           <div className="field-group">
             <label className="field-label">Presets</label>
             <div className="btn-row">
-              <button className="btn-sm" onClick={onSavePreset}>
-                <i className="ti ti-device-floppy" /> Save preset
+              <button className="btn-sm" disabled={activePresetIdx < 0} onClick={() => onDuplicatePreset(activePresetIdx)}>
+                <i className="ti ti-copy" /> Duplicate preset
               </button>
             </div>
             <div className="preset-list">
@@ -223,13 +222,6 @@ export default function PieceCreator({
                     {p.builtIn && <span className="preset-badge">built-in</span>}
                   </span>
                   <span className="preset-count">{p.pieces.length}</span>
-                  <button
-                    className="preset-dup-btn"
-                    title="Duplicate preset"
-                    onClick={e => { e.stopPropagation(); onDuplicatePreset(i); }}
-                  >
-                    <i className="ti ti-copy" />
-                  </button>
                 </div>
               ))}
             </div>

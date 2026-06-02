@@ -90,7 +90,37 @@ class Shape:
         """
         self.name = name
         self.coordinates = coordinates
+        self.exterior_coordinates = [coordinates]
         self.polygon = Polygon(coordinates)  # Create a Shapely Polygon from the coordinates
+        self.geometry = self.polygon
+        self.hole_coordinates = []
+
+    @classmethod
+    def from_geometry(cls, name, geometry):
+        """
+        Create a Shape object from a Shapely Polygon or MultiPolygon.
+        """
+        if not isinstance(geometry, (Polygon, MultiPolygon)):
+            raise ValueError("Geometry must be a Polygon or MultiPolygon")
+
+        shape = cls.__new__(cls)
+        shape.name = name
+        shape.geometry = geometry
+        shape.polygon = geometry
+        shape.hole_coordinates = []
+        shape.exterior_coordinates = []
+
+        if isinstance(geometry, Polygon):
+            shape.exterior_coordinates = [list(geometry.exterior.coords)[:-1]]
+            shape.coordinates = shape.exterior_coordinates[0]
+            shape.hole_coordinates = [list(ring.coords)[:-1] for ring in geometry.interiors]
+        else:  # MultiPolygon
+            shape.exterior_coordinates = [list(poly.exterior.coords)[:-1] for poly in geometry.geoms]
+            shape.coordinates = shape.exterior_coordinates[0]
+            for poly in geometry.geoms:
+                shape.hole_coordinates.extend([list(ring.coords)[:-1] for ring in poly.interiors])
+
+        return shape
 
     def scale(self, x_factor, y_factor, origin='center'):
         """
@@ -187,7 +217,37 @@ class Shape:
         String representation of the shape.
         """
         return f"Shape(name={self.name}, coordinates={self.coordinates})"
-    
+
+
+def get_geometry_boundary_rings(geometry):
+    """Return a list of exterior boundary rings for a Polygon or MultiPolygon."""
+    if isinstance(geometry, Polygon):
+        return [list(geometry.exterior.coords)[:-1]]
+    if isinstance(geometry, MultiPolygon):
+        return [list(poly.exterior.coords)[:-1] for poly in geometry.geoms]
+    raise ValueError(f"Unsupported geometry type for boundary extraction: {type(geometry)}")
+
+
+def get_geometry_boundary_segments(geometry):
+    """Return all exterior line segments for a Polygon or MultiPolygon."""
+    segments = []
+    for ring in get_geometry_boundary_rings(geometry):
+        for index in range(len(ring)):
+            x1, y1 = ring[index]
+            x2, y2 = ring[(index + 1) % len(ring)]
+            segments.append(((x1, y1), (x2, y2)))
+    return segments
+
+
+def get_primary_exterior_coords(geometry):
+    """Return the primary exterior coordinates for a Polygon or MultiPolygon."""
+    if isinstance(geometry, Polygon):
+        return list(geometry.exterior.coords)[:-1]
+    if isinstance(geometry, MultiPolygon):
+        largest_poly = max(geometry.geoms, key=lambda poly: poly.area)
+        return list(largest_poly.exterior.coords)[:-1]
+    raise ValueError(f"Unsupported geometry type for boundary extraction: {type(geometry)}")
+
 # Define the 10 shapes
 
 # RULES FOR MAKING SHAPES
@@ -261,7 +321,7 @@ def generate_puzzle(shapes_list, showGraph):
     shapes_list.remove(first_shape)
 
     combined_shape = first_shape.polygon
-    print(f"Initial combined shape coordinates: {list(combined_shape.exterior.coords)}")
+    print(f"Initial combined shape coordinates: {get_primary_exterior_coords(combined_shape)}")
 
     # now, we choose a random shape that has a side that can be shared with one of the shapes in the final shapes list
     # and try to place it there without overlapping any of the other shapes in the final shapes list
@@ -279,29 +339,32 @@ def generate_puzzle(shapes_list, showGraph):
         # first, I need to find a convex angle on the combined shape to work with,
         # if there are no convex angles, I'll let the algorithm run as normal without that guidance
         combined_shape_convex_points = []
-        print(f"Combined shape points: {list(combined_shape.exterior.coords)[:-1]}")
-        for combined_shape_point in list(combined_shape.exterior.coords)[:-1]:
-            Point_A = Point(combined_shape_point)
-            index = list(combined_shape.exterior.coords).index(combined_shape_point)
-            Point_B = Point(list(combined_shape.exterior.coords)[(index + 1) % (len(list(combined_shape.exterior.coords)) - 1)]) # the -1 is because the last point is the same as the first point
-            Point_C = Point(list(combined_shape.exterior.coords)[(index + 2) % (len(list(combined_shape.exterior.coords)) - 1)])
-            print(f"Combined shape point: {Point_B}")
-            if Point_A.distance(Point_B) < .01 or Point_B.distance(Point_C) < .01:
-                print("convex angle caused by slight translation disparity")
-                continue
-            if combined_shape.covers(Point((Point_A.x + Point_C.x) / 2, (Point_A.y + Point_C.y) / 2)):
-                print("Found concave angle, continuing to next point.")
-                continue  # this is a concave angle, so we skip it
-            angleBA = math.atan2(Point_B.y - Point_A.y, Point_B.x - Point_A.x)   # angle of the final shape side segment
-            angleBC = math.atan2(Point_B.y - Point_C.y, Point_B.x - Point_C.x)   # angle of the shape to place side segment
-            print(f"AngleBA: {math.degrees(angleBA)}, AngleBC: {math.degrees(angleBC)}")
-            convex_angle = round(abs(math.degrees(angleBA - angleBC)))
-            if convex_angle > 180:
-                convex_angle = 360 - convex_angle
-            print(f"angle at combined shape point: {convex_angle}")
-            if (convex_angle == 45) or (convex_angle == 90) or (convex_angle == 135):
-                print(f"Using convex point with angle {convex_angle} degrees: {Point_A, Point_B, Point_C}")
-                combined_shape_convex_points.append((Point_A, Point_B, Point_C, Point_B.distance(Point_A), Point_B.distance(Point_C), convex_angle))
+        boundary_rings = get_geometry_boundary_rings(combined_shape)
+        print(f"Combined shape boundary rings: {boundary_rings}")
+        for ring in boundary_rings:
+            print(f"Combined shape points: {ring}")
+            for index in range(len(ring)):
+                combined_shape_point = ring[index]
+                Point_A = Point(combined_shape_point)
+                Point_B = Point(ring[(index + 1) % len(ring)])
+                Point_C = Point(ring[(index + 2) % len(ring)])
+                print(f"Combined shape point: {Point_B}")
+                if Point_A.distance(Point_B) < .01 or Point_B.distance(Point_C) < .01:
+                    print("convex angle caused by slight translation disparity")
+                    continue
+                if combined_shape.covers(Point((Point_A.x + Point_C.x) / 2, (Point_A.y + Point_C.y) / 2)):
+                    print("Found concave angle, continuing to next point.")
+                    continue  # this is a concave angle, so we skip it
+                angleBA = math.atan2(Point_B.y - Point_A.y, Point_B.x - Point_A.x)   # angle of the final shape side segment
+                angleBC = math.atan2(Point_B.y - Point_C.y, Point_B.x - Point_C.x)   # angle of the shape to place side segment
+                print(f"AngleBA: {math.degrees(angleBA)}, AngleBC: {math.degrees(angleBC)}")
+                convex_angle = round(abs(math.degrees(angleBA - angleBC)))
+                if convex_angle > 180:
+                    convex_angle = 360 - convex_angle
+                print(f"angle at combined shape point: {convex_angle}")
+                if (convex_angle == 45) or (convex_angle == 90) or (convex_angle == 135):
+                    print(f"Using convex point with angle {convex_angle} degrees: {Point_A, Point_B, Point_C}")
+                    combined_shape_convex_points.append((Point_A, Point_B, Point_C, Point_B.distance(Point_A), Point_B.distance(Point_C), convex_angle))
 
         print(f"Combined shape convex points: {combined_shape_convex_points}")
 
@@ -309,7 +372,7 @@ def generate_puzzle(shapes_list, showGraph):
         if len(combined_shape_convex_points) == 0:
             # no convex points found, proceed as normal
             print("No convex points found on combined shape.")
-            coords_to_use = list(combined_shape.exterior.coords)[:-1]
+            coords_to_use = get_primary_exterior_coords(combined_shape)
             print(f"Using combined shape coordinates: {coords_to_use}")
             for coords_to_use_index in range(len(coords_to_use)):
                 x1, y1 = coords_to_use[coords_to_use_index]
@@ -321,7 +384,7 @@ def generate_puzzle(shapes_list, showGraph):
                 line_segments_to_use.append(((convex_point[1].x, convex_point[1].y), (convex_point[2].x, convex_point[2].y), convex_point[5], convex_point[3])) # side length from Point_B to Point_A, its twin
             line_segments_to_use.extend(line_segments_to_use)
             
-            coords_to_use = list(combined_shape.exterior.coords)[:-1]
+            coords_to_use = get_primary_exterior_coords(combined_shape)
             print(f"Using combined shape coordinates: {coords_to_use}")
             for coords_to_use_index in range(len(coords_to_use)):
                 x1, y1 = coords_to_use[coords_to_use_index]
@@ -661,7 +724,7 @@ def generate_puzzle(shapes_list, showGraph):
             shape_to_place = None
     if len(shapes_list) == 0:
         print("All shapes placed successfully!")
-        combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
+        combined_shape_obj = Shape.from_geometry("Combined Shape", combined_shape)
         if (showGraph):
             final_combined_shape_list = [combined_shape_obj]
             graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
@@ -670,7 +733,7 @@ def generate_puzzle(shapes_list, showGraph):
     else:
         print("Could not place all shapes, something went wrong. Try again")
         print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
-        combined_shape_obj = Shape("Combined Shape", list(combined_shape.exterior.coords)[:-1])
+        combined_shape_obj = Shape.from_geometry("Combined Shape", combined_shape)
         if (showGraph):
             final_combined_shape_list = [combined_shape_obj]
             graph_everything([combined_shape_obj], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)

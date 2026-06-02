@@ -167,7 +167,7 @@ export default function App() {
   const createPuzzle = useCallback(async () => {
     if (!pieces.length) return;
     const result = await generatePuzzle();
-    const shape = result.combined_shape?.coordinates || [];
+    const shape = result.combined_shape || { coordinates: [] };
     const solvedShapes = result.solved_shapes || [];
     const puzzle = {
       shape,

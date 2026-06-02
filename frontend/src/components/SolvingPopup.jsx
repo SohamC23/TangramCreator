@@ -19,19 +19,52 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
   // Drag state
   const [dragging, setDragging] = useState(null);
 
+  const getShapeRings = useCallback((shape) => {
+    if (!shape) return [];
+    if (Array.isArray(shape)) return [shape];
+    if (Array.isArray(shape.exteriors)) return shape.exteriors;
+    if (Array.isArray(shape.coordinates)) return [shape.coordinates];
+    return [];
+  }, []);
+
+  const getShapeHoles = useCallback((shape) => {
+    if (!shape) return [];
+    return shape.holes || shape.hole_coordinates || [];
+  }, []);
+
+  const getShapeVertices = useCallback((shape) => {
+    const rings = getShapeRings(shape);
+    const holes = getShapeHoles(shape);
+    return [...rings.flat(), ...holes.flat()];
+  }, [getShapeRings, getShapeHoles]);
+
+  const buildShapePath = useCallback((shape) => {
+    const rings = [...getShapeRings(shape), ...getShapeHoles(shape)];
+    return rings
+      .filter(ring => Array.isArray(ring) && ring.length)
+      .map((ring) => {
+        const [first, ...rest] = ring;
+        const path = [`M ${first[0]} ${first[1]}`];
+        rest.forEach(([x, y]) => path.push(`L ${x} ${y}`));
+        path.push("Z");
+        return path.join(" ");
+      })
+      .join(" ");
+  }, [getShapeRings, getShapeHoles]);
+
   // Snap threshold in SVG units (approx 3mm — scale relative to puzzle size)
   const SNAP_THRESHOLD = useMemo(() => {
-    const coords = puzzle?.shape || [];
+    const coords = getShapeVertices(puzzle?.shape);
     if (!coords.length) return 3;
     const xs = coords.map(c => c[0]);
     const ys = coords.map(c => c[1]);
     const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
     return size * 0.04;
-  }, [puzzle]);
+  }, [puzzle, getShapeVertices]);
 
   // Puzzle bounds for viewBox
   const puzzleBounds = useMemo(() => {
-    const coords = puzzle?.shape || [];
+    const coords = getShapeVertices(puzzle?.shape);
     if (!coords.length) return { minX: 0, minY: 0, width: 100, height: 100 };
     const xs = coords.map(c => c[0]);
     const ys = coords.map(c => c[1]);
@@ -52,7 +85,7 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
     };
-  }, [puzzle]);
+  }, [puzzle, getShapeVertices]);
 
   // Convert math coords to screen SVG coords (flip Y)
   const toScreenSimple = useCallback(([x, y]) => {
@@ -230,12 +263,14 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
       .join("");
     const placedSvg = `<svg viewBox="${vb}">${placedPolygons}</svg>`;
 
-    // Build expected (combined shape outline) SVG
-    const expectedPts = puzzle.shape.map(c => toScreenSimple(c).join(",")).join(" ");
-    const expectedSvg = `<svg viewBox="${vb}"><polygon points="${expectedPts}" /></svg>`;
+    const expectedPath = buildShapePath({
+      exteriors: getShapeRings(puzzle.shape).map(ring => ring.map(toScreenSimple)),
+      holes: getShapeHoles(puzzle.shape).map(ring => ring.map(toScreenSimple)),
+    });
+    const expectedSvg = `<svg viewBox="${vb}"><path d="${expectedPath}" fill-rule="evenodd" /></svg>`;
 
     onCheckSolved(placedSvg, expectedSvg);
-  }, [placedPieces, puzzleBounds, puzzle.shape, toScreenSimple, onCheckSolved]);
+  }, [placedPieces, puzzleBounds, puzzle.shape, toScreenSimple, onCheckSolved, getShapeRings, getShapeHoles, buildShapePath]);
 
   const timerLabel = isComplete
     ? "Solve time — complete!"
@@ -291,14 +326,34 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
               ) : (
                 <>
                   {/* Puzzle outline — solid, 4px thick */}
-                  <polygon
-                    points={puzzle.shape.map(c => toScreenSimple(c).join(",")).join(" ")}
-                    fill="none"
-                    stroke="var(--c-text)"
-                    strokeWidth="4"
-                    strokeLinejoin="round"
-                    opacity="0.6"
-                  />
+                  {getShapeRings(puzzle.shape).map((ring, outerIndex) => {
+                    const pts = ring.map(c => toScreenSimple(c).join(",")).join(" ");
+                    return (
+                      <polygon
+                        key={`puzzle-outer-${outerIndex}`}
+                        points={pts}
+                        fill="none"
+                        stroke="var(--c-text)"
+                        strokeWidth="4"
+                        strokeLinejoin="round"
+                        opacity="0.6"
+                      />
+                    );
+                  })}
+                  {getShapeHoles(puzzle.shape).map((ring, holeIndex) => {
+                    const pts = ring.map(c => toScreenSimple(c).join(",")).join(" ");
+                    return (
+                      <polygon
+                        key={`puzzle-hole-${holeIndex}`}
+                        points={pts}
+                        fill="none"
+                        stroke="var(--c-text)"
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                        opacity="0.8"
+                      />
+                    );
+                  })}
 
                   {/* Placed pieces sorted by z-order */}
                   {sortedPlaced.map(({ idx, coords: pCoords }) => {
@@ -371,14 +426,14 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
                   onClick={rotateActive}
                   disabled={activePieceIdx == null || isComplete}
                 >
-                  <i className="ti ti-rotate" /> Rotate
+                  <i className="ti ti-rotate" style={{ transform: "scaleX(-1)" }} /> Rotate
                 </button>
                 <button
                   className="btn-sm"
                   onClick={flipActive}
                   disabled={activePieceIdx == null || isComplete}
                 >
-                  <i className="ti ti-flip-horizontal" /> Flip
+                  <i className="ti ti-flip-horizontal" style={{ transform: "rotate(-90deg)" }} /> Flip
                 </button>
               </div>
               <button className="btn-sm btn-sm--full" onClick={reset} disabled={isComplete}>
