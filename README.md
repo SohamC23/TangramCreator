@@ -3,20 +3,20 @@
 ## About
 A full-stack web application for generating, customizing, and solving tangram puzzles. Define your own puzzle pieces, generate combined target shapes from them, and solve the resulting puzzles interactively with drag-and-drop, rotation, flipping, and automatic snapping.
 
-## Tech Stack
+# Tech Stack
 
-# Frontend
+## Frontend
 
 React (with Vite) using:
  - axios for API requests
 
-# Backend
+## Backend
 Python using: 
 - FastAPI with uvicorn
 - Shapely for polygon geometry (union, symmetric difference, area comparison)
 - Pydantic models for request validation
 
-# Features
+## Features
 - From the dashboard, you can generate a puzzle from the current piece set, and the backend assembles the pieces into a tangram puzzle and opens the solver pop-up with said puzzle
 - Past puzzles that were created can be viewed or solved again and are displayed alongside stats for puzzles generated, puzzles solved, and current piece count.
 - The piece creator lets you build custom pieces by entering vertex coordinates with a live graph preview, and it lets you name individual pieces and presets, update/duplicate/delete pieces. The custom pieces are saved as a preset, and then a puzzle can be generated with those custom pieces.
@@ -25,20 +25,20 @@ Python using:
 - In the solver, a timer tracks solve time, "Show solution" shows a solved solution the puzzle was generated from, "Reset" clears the canvas, and "Check Solved" user has arranged a valid solution to the puzzle
 
 
-## Running the Project
-# Backend (in git bash terminal)
+# Running the Project
+## Backend (in git bash terminal)
 cd backend
 uvicorn main:app --host localhost --port 8000
 The backend runs at http://localhost:8000. CORS is configured for the Vite dev server (http://localhost:5173) and preview server (http://localhost:4173).
 
-# Frontend (in git bash terminal)
+## Frontend (in git bash terminal)
 cd frontend
 cd src
 npm install
 npm run build
 npm run preview
 
-# Known Limitations / Coming Soon
+## Known Limitations / Coming Soon
 The following features are present in the UI but not yet functional. They will be implemented in a future update:
 
 - Export STL — the thickness and scale inputs and the STL download button in the STL Export section are placeholders. STL generation for 3D printing is not yet wired up.
