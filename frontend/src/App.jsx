@@ -202,6 +202,22 @@ export default function App() {
         expected_svg: expectedSvg,
       });
       if (res.data.matches) {
+        // Mark puzzle as solved if not already, updating the global puzzle list
+        setAllPuzzles(prev => prev.map(p => {
+          if (solverPuzzle && p.id === solverPuzzle.id) {
+            const alreadySolved = p.solved === true;
+            if (!alreadySolved) {
+              return { ...p, solvedShapes: res.data.solved_shapes || p.solvedShapes || [], solved: true };
+            }
+          }
+          return p;
+        }));
+
+        setSolverPuzzle(prev => (prev && solverPuzzle && prev.id === solverPuzzle.id)
+          ? { ...prev, solvedShapes: res.data.solved_shapes || prev.solvedShapes || [], solved: true }
+          : prev
+        );
+
         setSolverComplete(true);
         setSolverFeedback("");
       } else {
@@ -223,7 +239,7 @@ export default function App() {
         setSolverFeedback("");
       }, 3000);
     }
-  }, []);
+  }, [solverPuzzle]);
 
   const solverPieces = solverPuzzle
     ? (presets[solverPuzzle.presetIdx]?.pieces || pieces)

@@ -74,6 +74,11 @@ export default function Dashboard({
     };
   };
 
+  // Only consider puzzles explicitly marked `solved: true` as solved.
+  // Generator may include `solvedShapes` (the expected arrangement) but that
+  // should not mark a puzzle as solved until the user actually solves it.
+  const solvedCount = puzzlesForPreset.filter(p => p.solved === true).length;
+
   return (
     <section className="section">
       <h2 className="section-title">Dashboard</h2>
@@ -99,7 +104,7 @@ export default function Dashboard({
         </div>
         <div className="stat-card">
           <span className="stat-label">Puzzles solved</span>
-          <span className="stat-value">0</span>
+          <span className="stat-value">{solvedCount}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Current pieces</span>
@@ -131,6 +136,11 @@ export default function Dashboard({
                   className="puzzle-tile"
                   onClick={() => onOpenSolver(p)}
                 >
+                  {p.solved === true && (
+                    <span className="puzzle-solved-badge">
+                      <i className="ti ti-circle-check" /> Solved
+                    </span>
+                  )}
                   <svg
                     viewBox={`${viewMinX} ${viewMinY} ${viewWidth} ${viewHeight}`}
                     preserveAspectRatio="xMidYMid meet"
