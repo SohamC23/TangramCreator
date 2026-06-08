@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
+from mangum import Mangum
 
 from basemodels import GenerateTangramRequest
 from basemodels import CheckSVGRequest
@@ -79,3 +80,4 @@ if __name__ == "__main__":
 
     uvicorn.run("main:app", host="localhost", port=8000)
 
+handler = Mangum(app)
