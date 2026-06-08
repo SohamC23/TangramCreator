@@ -24,6 +24,10 @@ app.add_middleware(
 )
 
 
+@app.get(API_BASE_URL + "/health")
+def health_check():
+    return {"status": "ok"}
+
 @app.post(API_BASE_URL + "/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
     print("request before:", request)
