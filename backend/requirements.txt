@@ -2,8 +2,9 @@ fastapi==0.136.1
 uvicorn==0.47.0
 mangum==0.21.0
 shapely==2.1.2
-numpy==2.4.05
+numpy==1.26.4
 pydantic==2.13.4
 starlette==1.0.0
 anyio==4.13.0
 python-multipart==0.0.29
+typing==3.7.4.3

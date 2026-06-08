@@ -1,7 +1,5 @@
 import math
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon as MplPolygon
 from shapely.geometry import Polygon, Point, MultiPolygon
 from shapely.affinity import rotate, translate, scale
 from shapely.ops import snap
@@ -56,28 +54,6 @@ LENGTH_E = LENGTH_D * round(np.sqrt(2), 5)
 # Later, we can work on optimizing the number of shared sides
 
 
-
-# this'll graph the shapes once we have them all placed
-def graph_everything(final_shapes_list, alpha, border, title, loops):
-    plt.rcParams['figure.figsize'] = [10, 8]    # Set the figure size for better visibility
-    fig, ax = plt.subplots()    # Create a figure and axis
-    ax.set_facecolor('#204652')  # Change the plot area background color
-    fig.patch.set_facecolor('#204652')  # Change the entire figure background color
-    for shape in final_shapes_list:
-        coords = np.array(shape.coordinates)    # Get the exterior coordinates of the shape
-        shape = MplPolygon(coords, facecolor='black', edgecolor=border, alpha=alpha, linewidth=1)
-        ax.add_patch(shape)
-    ax.set_aspect('equal')    # Set equal aspect ratio so the shapes aren't distorted
-    all_coords = np.vstack([np.array(shape.coordinates) for shape in final_shapes_list])
-    xmin, ymin = all_coords.min(axis=0)
-    xmax, ymax = all_coords.max(axis=0)
-    ax.set_xlim(xmin-1, xmax+1)   # setting axis limits
-    ax.set_ylim(ymin-1, ymax+1)
-    ax.grid(False)    # Remove grid for better visibility
-    ax.axis('off')  # Turn off the axis
-    plt.title(title, color='#ff9966')
-    plt.suptitle("Made with " + str(loops) + " loops", fontsize=12, color="#ff9966")
-    plt.show()
 
 # defining the shapes class:
 class Shape:
@@ -309,7 +285,7 @@ DEFAULT_SHAPES_LIST = [
     )
 ]
 
-def generate_puzzle(shapes_list, showGraph):
+def generate_puzzle(shapes_list):
     final_shapes_list = []
 
     # Debugging print statements added throughout the code
@@ -698,8 +674,6 @@ def generate_puzzle(shapes_list, showGraph):
 
                                 print(f"Combined shape after union: {combined_shape}")
                                 successfully_placed_shape = True
-                                if isinstance(combined_shape, MultiPolygon):
-                                    graph_everything(final_shapes_list, .4, 'black', 'Could not place all shapes, something went wrong', loop)
                                 # this moves the shape_to_place from the shapes_list to the final_shapes_list where it won't be altered anymore
                                 print(f"Placing shape: {shape_to_place.name}")
                                 print(f"final shapes list: {final_shapes_list}")
@@ -725,17 +699,9 @@ def generate_puzzle(shapes_list, showGraph):
     if len(shapes_list) == 0:
         print("All shapes placed successfully!")
         combined_shape_obj = Shape.from_geometry("Combined Shape", combined_shape)
-        if (showGraph):
-            final_combined_shape_list = [combined_shape_obj]
-            graph_everything(final_combined_shape_list, 1.0, 'black', 'Custom Tangram Puzzle Maker', loop)
-            graph_everything(final_shapes_list, 0.9, 'red', 'Custom Tangram Puzzle Maker - Solved', loop)
         return [combined_shape_obj, final_shapes_list]
     else:
         print("Could not place all shapes, something went wrong. Try again")
         print(f"Shapes remaining: {[shape.name for shape in shapes_list]}")
         combined_shape_obj = Shape.from_geometry("Combined Shape", combined_shape)
-        if (showGraph):
-            final_combined_shape_list = [combined_shape_obj]
-            graph_everything([combined_shape_obj], 1.0, 'black', 'Could not place all shapes, something went wrong', loop)
-            graph_everything(final_shapes_list, 0.9, 'red', f"Shapes remaining: {[shape.name for shape in shapes_list]}", loop)
         return [combined_shape_obj, final_shapes_list]

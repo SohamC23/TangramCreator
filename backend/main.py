@@ -24,13 +24,13 @@ app.add_middleware(
 )
 
 
-@app.post("/api/generate-tangram")
+@app.post(API_BASE_URL + "/generate-tangram")
 def generate_tangram(request: GenerateTangramRequest):
     print("request before:", request)
     shapes = gcs.build_shapes(request.shapes)
     print("shapes:", shapes)
     try:
-        tangramInfo = gg.generate_puzzle(shapes, False)
+        tangramInfo = gg.generate_puzzle(shapes)
         print("tangramInfo type:", type(tangramInfo))
         print("tangramInfo[0] type:", type(tangramInfo[0]))
         print("tangramInfo[0]:", tangramInfo[0])
@@ -57,7 +57,7 @@ def generate_tangram(request: GenerateTangramRequest):
     }
 
 
-@app.post("/api/check-svg")
+@app.post(API_BASE_URL + "/check-svg")
 def check_svg(request: CheckSVGRequest):
 
     print("\n\ntrying to check solution\n\n")
