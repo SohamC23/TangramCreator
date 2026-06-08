@@ -8,13 +8,16 @@ import gramtan_check_solved as gcs
 
 from fastapi.middleware.cors import CORSMiddleware
 
+API_BASE_URL = "/api"
+
+
 app = FastAPI(title="Tangram Creator API")
 
 
 # Allow React frontend to connect and bypass CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origins=["https://main.d3g9m7pl8ansh7.amplifyapp.com/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
