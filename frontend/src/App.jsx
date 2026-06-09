@@ -165,7 +165,7 @@ export default function App() {
       }
     );
     return res.data;
-  }, [presets, activePresetIdx]);
+  }, [presets, activePresetIdx, API_BASE]);
 
   const createPuzzle = useCallback(async () => {
     if (!pieces.length) return;
@@ -242,7 +242,7 @@ export default function App() {
         setSolverFeedback("");
       }, 3000);
     }
-  }, [solverPuzzle]);
+  }, [solverPuzzle, API_BASE]);
 
   const solverPieces = solverPuzzle
     ? (presets[solverPuzzle.presetIdx]?.pieces || pieces)
