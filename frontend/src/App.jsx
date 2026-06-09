@@ -13,6 +13,9 @@ import axios from "axios";
 
 
 export default function App() {
+
+  const API_BASE = import.meta.env.VITE_API_URL;
+
   /* ── Auth ──────────────────────────────────────────── */
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -156,7 +159,7 @@ export default function App() {
   }, [presets]);
 
   const generatePuzzle = useCallback(async () => {
-    const res = await axios.post("http://localhost:8000/api/generate-tangram", 
+    const res = await axios.post(`${API_BASE}/api/generate-tangram`, 
       {
         shapes: presets[activePresetIdx].pieces,
       }
@@ -197,7 +200,7 @@ export default function App() {
   /* ── Check Solved: POST both SVGs to backend ─────── */
   const handleCheckSolved = useCallback(async (placedSvg, expectedSvg) => {
     try {
-      const res = await axios.post("http://localhost:8000/api/check-svg", {
+      const res = await axios.post(`${API_BASE}/api/check-svg`, {
         placed_svg: placedSvg,
         expected_svg: expectedSvg,
       });
