@@ -17,7 +17,7 @@ app = FastAPI(title="Tangram Creator API")
 # Allow React frontend to connect and bypass CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://main.d3g9m7pl8ansh7.amplifyapp.com/"],
+    allow_origins=["https://main.d3g9m7pl8ansh7.amplifyapp.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,4 +87,4 @@ if __name__ == "__main__":
 
     uvicorn.run("main:app", host="localhost", port=8000)
 
-handler = Mangum(app)
+handler = Mangum(app, lifespan="off")
