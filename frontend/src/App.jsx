@@ -91,6 +91,17 @@ export default function App() {
     }
   }, [selectedPieceIdx, pieces, setPieces]);
 
+  const handlePresetNameChange = useCallback((val) => {
+    setPresetName(val);
+    if (activePresetIdx >= 0 && presets[activePresetIdx] && !presets[activePresetIdx].builtIn) {
+      setPresets(prev => {
+        const next = [...prev];
+        next[activePresetIdx] = { ...next[activePresetIdx], name: val };
+        return next;
+      });
+    }
+  }, [activePresetIdx, presets]);
+
   const updateShape = useCallback(() => {
     const parsed = coords
       .map(([x,y]) => [parseFloat(x), parseFloat(y)])
@@ -312,7 +323,7 @@ export default function App() {
           activePresetIdx={activePresetIdx}
           onSelectPiece={selectPiece}
           onPieceNameChange={handlePieceNameChange}
-          onPresetNameChange={setPresetName}
+          onPresetNameChange={handlePresetNameChange}
           onCoordsChange={setCoords}
           onAddVertex={() => setCoords(c => [...c, ["",""]])}
           onUpdateShape={updateShape}

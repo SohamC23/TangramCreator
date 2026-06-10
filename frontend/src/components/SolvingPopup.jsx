@@ -171,6 +171,32 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
     });
   }, [isComplete, clientToSVG, placedPieces, nextZ]);
 
+  /* ── Touch handlers ───────────────────────────────── */
+  const onPieceTouchStart = useCallback((e, pieceIdx) => {
+    if (isComplete) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    if (!touch) return;
+    const [mx, my] = clientToSVG(touch.clientX, touch.clientY);
+    const placed = placedPieces.find(p => p.idx === pieceIdx);
+    if (!placed) return;
+
+    const z = nextZ;
+    setNextZ(z + 1);
+    setPlacedPieces(prev =>
+      prev.map(p => p.idx === pieceIdx ? { ...p, zOrder: z } : p)
+    );
+    setActivePieceIdx(pieceIdx);
+
+    setDragging({
+      idx: pieceIdx,
+      startMouse: [mx, my],
+      startCoords: placed.coords.map(c => [...c]),
+    });
+  }, [isComplete, clientToSVG, placedPieces, nextZ]);
+
   const onMouseMove = useCallback((e) => {
     if (!dragging) return;
 
@@ -204,16 +230,56 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
     setDragging(null);
   }, []);
 
+  const onTouchMove = useCallback((e) => {
+    if (!dragging) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    if (!touch) return;
+    const [mx, my] = clientToSVG(touch.clientX, touch.clientY);
+    const dxScreen = mx - dragging.startMouse[0];
+    const dyScreen = my - dragging.startMouse[1];
+    const dxMath = dxScreen;
+    const dyMath = -dyScreen;
+
+    let newCoords = translateCoords(dragging.startCoords, dxMath, dyMath);
+
+    let snap = findPuzzleSnap(newCoords, puzzle.shape, SNAP_THRESHOLD);
+    if (!snap) {
+      snap = findSnap(
+        dragging.idx,
+        newCoords,
+        placedPieces.filter(p => p.idx !== dragging.idx),
+        SNAP_THRESHOLD
+      );
+    }
+    if (snap) {
+      newCoords = translateCoords(newCoords, snap.dx, snap.dy);
+    }
+
+    setPlacedPieces(prev =>
+      prev.map(p => p.idx === dragging.idx ? { ...p, coords: newCoords } : p)
+    );
+  }, [dragging, clientToSVG, puzzle.shape, SNAP_THRESHOLD, placedPieces]);
+
+  const onTouchEnd = useCallback(() => {
+    setDragging(null);
+  }, []);
+
   useEffect(() => {
     if (dragging) {
       window.addEventListener("mousemove", onMouseMove);
       window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("touchmove", onTouchMove, { passive: false });
+      window.addEventListener("touchend", onTouchEnd);
       return () => {
         window.removeEventListener("mousemove", onMouseMove);
         window.removeEventListener("mouseup", onMouseUp);
+        window.removeEventListener("touchmove", onTouchMove);
+        window.removeEventListener("touchend", onTouchEnd);
       };
     }
-  }, [dragging, onMouseMove, onMouseUp]);
+  }, [dragging, onMouseMove, onMouseUp, onTouchMove, onTouchEnd]);
 
   /* ── Rotate active piece 45° CW ──────────────────── */
   const rotateActive = useCallback(() => {
@@ -372,6 +438,7 @@ export default function SolverOverlay({ puzzle, pieces, solvedShapes = [], isCom
                         strokeLinejoin="round"
                         style={{ cursor: isComplete ? "default" : "grab" }}
                         onMouseDown={e => onPieceMouseDown(e, idx)}
+                        onTouchStart={e => onPieceTouchStart(e, idx)}
                       />
                     );
                   })}
