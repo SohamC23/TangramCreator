@@ -45,6 +45,16 @@ export default function App() {
   const [pieceName, setPieceName] = useState("");
   const [presetName, setPresetName] = useState("");
   const [coords, setCoords] = useState([["",""],["",""],["",""]]);
+  const [savedPresetSnapshot, setSavedPresetSnapshot] = useState(() =>
+    JSON.stringify({ name: "Default tangram", pieces: cloneDeep(DEFAULT_PIECES), builtIn: true })
+  );
+
+  const isPresetDirty = useMemo(() => {
+    if (activePresetIdx < 0) return false;
+    const currentPreset = presets[activePresetIdx];
+    if (!currentPreset) return false;
+    return savedPresetSnapshot !== JSON.stringify(currentPreset);
+  }, [activePresetIdx, presets, savedPresetSnapshot]);
 
   /* ── Puzzles ───────────────────────────────────────── */
   const [allPuzzles, setAllPuzzles] = useState([]);
@@ -93,13 +103,38 @@ export default function App() {
 
   const handlePresetNameChange = useCallback((val) => {
     setPresetName(val);
-    if (activePresetIdx >= 0 && presets[activePresetIdx] && !presets[activePresetIdx].builtIn) {
+    if (activePresetIdx >= 0 && presets[activePresetIdx]) {
       setPresets(prev => {
         const next = [...prev];
         next[activePresetIdx] = { ...next[activePresetIdx], name: val };
         return next;
       });
     }
+  }, [activePresetIdx, presets]);
+
+  const saveCurrentPreset = useCallback(async () => {
+    if (!isPresetDirty || activePresetIdx < 0) return;
+    const currentPreset = presets[activePresetIdx];
+    if (!currentPreset) return;
+
+    try {
+      await axios.post(`${API_BASE}/api/save-preset`, {
+        preset: currentPreset,
+      });
+      setSavedPresetSnapshot(JSON.stringify(currentPreset));
+    } catch (err) {
+      console.error("Save preset failed:", err);
+    }
+  }, [activePresetIdx, isPresetDirty, presets, API_BASE]);
+
+  const deletePreset = useCallback(() => {
+    if (activePresetIdx < 0 || presets.length <= 1) return;
+    const nextActiveIdx = Math.min(activePresetIdx, presets.length - 2);
+    setPresets(prev => prev.filter((_, idx) => idx !== activePresetIdx));
+    setActivePresetIdx(nextActiveIdx);
+    setSelectedPieceIdx(-1);
+    setPresetName(presets[nextActiveIdx]?.builtIn ? "" : presets[nextActiveIdx]?.name || "");
+    setSavedPresetSnapshot(JSON.stringify(presets[nextActiveIdx] || {}));
   }, [activePresetIdx, presets]);
 
   const updateShape = useCallback(() => {
@@ -148,16 +183,21 @@ export default function App() {
       setPresetCounter(c);
       name = `Preset ${c}`;
     }
-    setPresets(prev => [...prev, { name, pieces: cloneDeep(pieces), builtIn: false }]);
-    setActivePresetIdx(presets.length); // new last index
+    const newPreset = { name, pieces: cloneDeep(pieces), builtIn: false };
+    setPresets(prev => [...prev, newPreset]);
+    const newIndex = presets.length;
+    setActivePresetIdx(newIndex); // new last index
+    setSavedPresetSnapshot(JSON.stringify(newPreset));
     setPresetName("");
     setSelectedPieceIdx(-1);
   }, [pieces, presetName, presetCounter, presets.length]);
 
   const duplicatePreset = useCallback((idx) => {
     const s = presets[idx];
-    setPresets(prev => [...prev, { name: s.name + " copy", pieces: cloneDeep(s.pieces), builtIn: false }]);
+    const newPreset = { name: s.name + " copy", pieces: cloneDeep(s.pieces), builtIn: false };
+    setPresets(prev => [...prev, newPreset]);
     setActivePresetIdx(presets.length);
+    setSavedPresetSnapshot(JSON.stringify(newPreset));
     setSelectedPieceIdx(-1);
   }, [presets]);
 
@@ -167,6 +207,7 @@ export default function App() {
     setPieceName("");
     setCoords([["",""],["",""],["",""]]);
     setPresetName(presets[idx]?.builtIn ? "" : presets[idx]?.name || "");
+    setSavedPresetSnapshot(JSON.stringify(presets[idx] || {}));
   }, [presets]);
 
   const generatePuzzle = useCallback(async () => {
@@ -321,6 +362,7 @@ export default function App() {
           coords={coords}
           presets={presets}
           activePresetIdx={activePresetIdx}
+          isPresetDirty={isPresetDirty}
           onSelectPiece={selectPiece}
           onPieceNameChange={handlePieceNameChange}
           onPresetNameChange={handlePresetNameChange}
@@ -330,6 +372,8 @@ export default function App() {
           onDeletePiece={deletePiece}
           onDuplicatePiece={duplicatePiece}
           onSavePreset={savePreset}
+          onSaveCurrentPreset={saveCurrentPreset}
+          onDeletePreset={deletePreset}
           onDuplicatePreset={duplicatePreset}
           onSwitchPreset={switchPreset}
         />

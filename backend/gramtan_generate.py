@@ -7,43 +7,6 @@ from random import choice, shuffle
 import copy
 
 
-# New idea
-
-
-# These are my 10 shapes:
-# 1. Bigger Triangle (1 piece)
-# 2. Big Triangle (1 piece)
-# 3. Medium Triangle (1 piece)  
-# 4. Small Triangles (2 pieces)
-# 5. Square (1 piece)
-# 6. Parallelogram (1 piece)
-# 7. Large Parallelogram (1 piece)
-# 8. Rectangle (1 piece)
-# 9. Trapezoid (1 piece)
-
-# All the angles in the shapes are either 45 or 90 degrees or 135 degrees, so all the triangles are isosceles right triangles
-# Each shape is related to the other by its dimensions:
-# The small triangle is the smallest unit, and the other shapes can be made putting a bunch of those together
-
-# Suppose the small triangle has legs of length 1 unit which we'll call 'Length_A'
-LENGTH_A = 1
-# The Small Triangle has a Hypotnuse of LENGTH_A * sqrt(2), which is also the leg length of the Medium Triangle
-LENGTH_B = LENGTH_A * round(np.sqrt(2), 5)
-# The Medium Triangle has a Hypotnuse of LENGTH_B * sqrt(2), which is also the leg length of the Big Triangle
-LENGTH_C = LENGTH_B * round(np.sqrt(2), 5)
-# The Big Triangle has a Hypotnuse of LENGTH_C * sqrt(2), which is also the leg length of the Bigger Triangle
-LENGTH_D = LENGTH_C * round(np.sqrt(2), 5)
-# The Big Triangle has a Hypotnuse of LENGTH_D * sqrt(2)
-LENGTH_E = LENGTH_D * round(np.sqrt(2), 5)
-# The Square has sides of Length_A
-# The Parallelogram has sides of LENGTH_A and LENGTH_B
-# The Large Parallelogram has sides of LENGTH_B and LENGTH_C
-# The Rectangle has sides of LENGTH_A and LENGTH_C
-# The Trapezoid has sides of LENGTH_A, LENGTH_B, and 3 * LENGTH_A
-
-# Note that LENGTH_C = 2 * LENGTH_A, and LENGTH_D = 2 * LENGTH_B, that'll be important later.
-
-
 # The main Idea! I have is to join shapes that have common sides together, 
 # or to split longer sides into smaller lengths and have them share those sides with smaller shapes
 
@@ -224,66 +187,8 @@ def get_primary_exterior_coords(geometry):
         return list(largest_poly.exterior.coords)[:-1]
     raise ValueError(f"Unsupported geometry type for boundary extraction: {type(geometry)}")
 
-# Define the 10 shapes
 
-# RULES FOR MAKING SHAPES
-# 1. All Interior angles are either 45, 90, or 135 degrees
-# 2. All side Length should be divisable by Length_A or be Length_B
-# 3. All shapes should be polygons (no holes or curves)
-# 4. All shapes should be at least (the largest side length divided by 10) thick at their midpoints
 
-DEFAULT_SHAPES_LIST = [
-    # 1. Bigger Triangle
-    Shape(
-        name="Bigger Triangle",
-        coordinates=[(0, 0), (LENGTH_D, 0), (0, LENGTH_D)]
-    ),
-    # 2. Big Triangle
-    Shape(
-        name="Big Triangle",
-        coordinates=[(0, 0), (LENGTH_C, 0), (0, LENGTH_C)]
-    ),
-    # 3. Medium Triangle
-    Shape(
-        name="Medium Triangle",
-        coordinates=[(0, 0), (LENGTH_B, 0), (0, LENGTH_B)]
-    ),
-    # 4. Small Triangle 1
-    Shape(
-        name="Small Triangle 1",
-        coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
-    ),
-    # 5. Small Triangle 2
-    Shape(
-        name="Small Triangle 2",
-        coordinates=[(0, 0), (LENGTH_A, 0), (0, LENGTH_A)]
-    ),
-    # 6. Square
-    Shape(
-        name="Square",
-        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_A), (0, LENGTH_A)]
-    ),
-    # 7. Parallelogram
-    Shape(
-        name="Parallelogram",
-        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (LENGTH_A, LENGTH_A)]
-    ),
-    # 8. Large Parallelogram
-    Shape(
-        name="Large Parallelogram",
-        coordinates=[(0, 0), (LENGTH_B, 0), (LENGTH_B + LENGTH_B, LENGTH_B), (LENGTH_B, LENGTH_B)]
-    ),
-    # 9. Rectangle
-    Shape(
-        name="Rectangle",
-        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A, LENGTH_C), (0, LENGTH_C)]
-    ),
-    # 10. Trapezoid
-    Shape(
-        name="Trapezoid",
-        coordinates=[(0, 0), (LENGTH_A, 0), (LENGTH_A + LENGTH_A, LENGTH_A), (-LENGTH_A, LENGTH_A)]
-    )
-]
 
 def generate_puzzle(shapes_list):
     final_shapes_list = []

@@ -10,6 +10,7 @@ export default function PieceCreator({
   coords,
   presets,
   activePresetIdx,
+  isPresetDirty,
   onSelectPiece,
   onPieceNameChange,
   onPresetNameChange,
@@ -18,6 +19,8 @@ export default function PieceCreator({
   onUpdateShape,
   onDeletePiece,
   onDuplicatePiece,
+  onSaveCurrentPreset,
+  onDeletePreset,
   onDuplicatePreset,
   onSwitchPreset,
 }) {
@@ -89,6 +92,17 @@ export default function PieceCreator({
 
         {/* ── Side panel column ────────────────── */}
         <div className="creator-side-col">
+          <div className="field-group">
+            <button
+              className="btn-sm btn-sm--full"
+              type="button"
+              onClick={onSaveCurrentPreset}
+              disabled={!isPresetDirty}
+            >
+              <i className="ti ti-save" /> Save Preset
+            </button>
+          </div>
+
           {/* Name this preset */}
           <div className="field-group">
             <label className="field-label">Name this preset</label>
@@ -208,6 +222,13 @@ export default function PieceCreator({
             <div className="btn-row">
               <button className="btn-sm" disabled={activePresetIdx < 0} onClick={() => onDuplicatePreset(activePresetIdx)}>
                 <i className="ti ti-copy" /> Duplicate preset
+              </button>
+              <button
+                className="btn-sm btn-sm--danger"
+                disabled={activePresetIdx < 0 || presets[activePresetIdx]?.builtIn}
+                onClick={onDeletePreset}
+              >
+                <i className="ti ti-trash" /> Delete preset
               </button>
             </div>
             <div className="preset-list">
