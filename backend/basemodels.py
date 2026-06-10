@@ -14,3 +14,8 @@ class GenerateTangramRequest(BaseModel):
 class CheckSVGRequest(BaseModel):
     placed_svg: str
     expected_svg: str
+
+
+class PresetIn(BaseModel):
+    name: str
+    shapes: list  # list of [x, y] coordinate pairs / shape coordinate lists

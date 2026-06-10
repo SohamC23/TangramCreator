@@ -5,13 +5,16 @@ from basemodels import GenerateTangramRequest
 from basemodels import CheckSVGRequest
 import gramtan_generate as gg
 import gramtan_check_solved as gcs
+from presets import router as presets_router
 
 from fastapi.middleware.cors import CORSMiddleware
+
 
 API_BASE_URL = "/api"
 
 
 app = FastAPI(title="Tangram Creator API")
+app.include_router(presets_router)
 
 
 # Allow React frontend to connect and bypass CORS
@@ -80,6 +83,18 @@ def check_svg(request: CheckSVGRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
     return result
+
+
+@app.post(API_BASE_URL + "/save-preset")
+def save_preset(name: str = Query(...), preset_data: str = Query(...)):
+    print(f"Saving preset with name: {name}")
+    print(f"Preset data length: {len(preset_data)}")
+    try:
+        gg.save_preset(name, preset_data)
+    except Exception as exc:
+        print("Error saving preset:", str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"message": "Preset saved successfully"}
 
 
 if __name__ == "__main__":
