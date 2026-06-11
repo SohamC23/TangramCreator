@@ -1062,7 +1062,11 @@ main {
   background: transparent;
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
-  cursor: default;
+  cursor: pointer;
+}
+
+.user-avatar-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
  
 .user-avatar-circle {

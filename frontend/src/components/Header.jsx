@@ -27,7 +27,13 @@ export default function Header({ presets, activePresetIdx, onSwitchPreset, user,
         </div>
 
         {user ? (
-          <div className="user-avatar-btn">
+          <div
+            className="user-avatar-btn"
+            role="button"
+            tabIndex={0}
+            onClick={onLoginClick}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onLoginClick(); }}
+          >
             <span className="user-avatar-circle">{user.initials}</span>
             {user.email.split("@")[0]}
           </div>
