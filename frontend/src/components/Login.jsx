@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Logo } from "../assets/Logo";
-import { signIn, signUp, confirmSignUp } from "aws-amplify/auth";
+import { signIn, signUp, confirmSignUp, getCurrentUser } from "aws-amplify/auth";
 
-export default function LoginModal({ onClose, onLogin }) {
+export default function LoginModal({ user, onClose, onLogin, onLogout }) {
   const [mode, setMode] = useState("signup");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -18,6 +18,14 @@ export default function LoginModal({ onClose, onLogin }) {
 
     setBusy(true);
     try {
+      try {
+        await getCurrentUser();
+        onLogin?.({ email, initials: email.substring(0, 2).toUpperCase() });
+        return;
+      } catch {
+        // no existing active session, continue with auth flow
+      }
+
       if (mode === "signup") {
         await signUp({
           username: email,
@@ -119,6 +127,21 @@ export default function LoginModal({ onClose, onLogin }) {
             : mode === "confirm" ? "Confirm account"
             : "Log in"}
         </button>
+
+        {user && (
+          <button
+            type="button"
+            className="login-submit"
+            onClick={() => {
+              setError("");
+              if (onLogout) onLogout();
+            }}
+            disabled={busy}
+            style={{ marginTop: "10px" }}
+          >
+            Log out
+          </button>
+        )}
 
         {mode !== "confirm" && (
           <p className="login-alt">

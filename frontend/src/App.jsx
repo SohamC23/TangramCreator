@@ -8,6 +8,7 @@ import PieceCreator from "./components/PieceCreator";
 import SolverOverlay from "./components/SolvingPopup";
 import StlExport from "./components/STLExport";
 import axios from "axios";
+import { getCurrentUser, fetchUserAttributes, signOut } from "aws-amplify/auth";
 
 
 
@@ -19,6 +20,31 @@ export default function App() {
   /* ── Auth ──────────────────────────────────────────── */
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await getCurrentUser();
+        const attrs = await fetchUserAttributes();
+        const email = attrs?.email ?? attrs?.find?.(a => a.Name === "email")?.Value ?? "";
+        if (email) {
+          setUser({ email, initials: email.substring(0, 2).toUpperCase() });
+        }
+      } catch (err) {
+        // no existing signed-in session
+      }
+    })();
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error("Sign out failed:", err);
+    }
+    setUser(null);
+    setLoginOpen(false);
+  }, []);
 
   /* ── Presets & active pieces ────────────────────────── */
   const [presets, setPresets] = useState([
@@ -310,8 +336,10 @@ export default function App() {
       {/* Login Modal */}
       {loginOpen && (
         <LoginModal
+          user={user}
           onClose={() => setLoginOpen(false)}
           onLogin={(u) => { setUser(u); setLoginOpen(false); }}
+          onLogout={handleLogout}
         />
       )}
 
