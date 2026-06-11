@@ -14,9 +14,9 @@ export const COLORS = [
 export const DEFAULT_PIECES = [
   { name: "Large tri A", coords: [[50,0],[50,50],[100,0]], colorIdx: 0 },
   { name: "Large tri B", coords: [[75,50],[125,50],[125,0]], colorIdx: 1 },
-  { name: "Medium tri", coords: [[75,75],[100,100],[125,75]], colorIdx: 2 },
+  { name: "Medium tri", coords: [[0,100],[50,100],[25,75]], colorIdx: 2 },
   { name: "Small tri A", coords: [[0,0],[0,25],[25,0]], colorIdx: 3 },
-  { name: "Small tri B", coords: [[0,50],[25,25],[25,50]], colorIdx: 4 },
-  { name: "Square", coords: [[0,75],[0,100],[25,100],[25,75]], colorIdx: 5 },
-  { name: "Parallelogram", coords: [[50,75],[50,100],[75,125],[75,100]], colorIdx: 6 },
+  { name: "Small tri B", coords: [[50,75],[75,100],[75,75]], colorIdx: 4 },
+  { name: "Square", coords: [[100,75],[100,100],[125,100],[125,75]], colorIdx: 5 },
+  { name: "Parallelogram", coords: [[0,50],[25,25],[25,50],[0,75]], colorIdx: 6 },
 ];

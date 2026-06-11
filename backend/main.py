@@ -5,16 +5,16 @@ from basemodels import GenerateTangramRequest
 from basemodels import CheckSVGRequest
 import gramtan_generate as gg
 import gramtan_check_solved as gcs
-from presets import router as presets_router
+import presets
 
 from fastapi.middleware.cors import CORSMiddleware
 
 
-API_BASE_URL = "/api"
+API_BASE_URL = "api"    # no leading slash because AWS Lambda adds a trailing slash automattically
 
 
 app = FastAPI(title="Tangram Creator API")
-app.include_router(presets_router)
+app.include_router(presets.presets_router)
 
 
 # Allow React frontend to connect and bypass CORS
@@ -86,15 +86,18 @@ def check_svg(request: CheckSVGRequest):
 
 
 @app.post(API_BASE_URL + "/save-preset")
-def save_preset(name: str = Query(...), preset_data: str = Query(...)):
-    print(f"Saving preset with name: {name}")
-    print(f"Preset data length: {len(preset_data)}")
-    try:
-        gg.save_preset(name, preset_data)
-    except Exception as exc:
-        print("Error saving preset:", str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
-    return {"message": "Preset saved successfully"}
+def save_preset(body: presets.PresetIn, sub: str = presets.Depends(presets.get_current_user)):
+    preset_id = str(presets.uuid.uuid4())
+    presets.table.put_item(
+        Item={
+            "PK": presets.user_pk(sub),
+            "SK": f"PRESET#{preset_id}",
+            "name": body.name,
+            "shapes": body.shapes,
+            "createdAt": presets.datetime.now(presets.timezone.utc).isoformat(),
+        }
+    )
+    return {"id": preset_id, "name": body.name, "shapes": body.shapes}
 
 
 if __name__ == "__main__":
