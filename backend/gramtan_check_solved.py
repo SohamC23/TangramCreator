@@ -8,7 +8,7 @@ from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 
 from basemodels import ShapePayload
-from gramtan_generate import Shape, DEFAULT_SHAPES_LIST
+from gramtan_generate import Shape
 
 
 last_tangram: dict = {
