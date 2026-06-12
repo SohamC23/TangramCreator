@@ -31,7 +31,7 @@ export default function App() {
           setUser({ email, initials: email.substring(0, 2).toUpperCase() });
         }
       } catch (err) {
-        // no existing signed-in session
+        console.log("No existing signed-in session:", err);
       }
     })();
   }, []);
@@ -144,7 +144,7 @@ export default function App() {
     if (!currentPreset) return;
 
     try {
-      await axios.post(`${API_BASE}/api/save-preset`, {
+      await axios.post(`${API_BASE}api/save-preset`, {
         preset: currentPreset,
       });
       setSavedPresetSnapshot(JSON.stringify(currentPreset));
@@ -237,7 +237,7 @@ export default function App() {
   }, [presets]);
 
   const generatePuzzle = useCallback(async () => {
-    const res = await axios.post(`${API_BASE}/api/generate-tangram`, 
+    const res = await axios.post(`${API_BASE}api/generate-tangram`, 
       {
         shapes: presets[activePresetIdx].pieces,
       }
@@ -278,7 +278,7 @@ export default function App() {
   /* ── Check Solved: POST both SVGs to backend ─────── */
   const handleCheckSolved = useCallback(async (placedSvg, expectedSvg) => {
     try {
-      const res = await axios.post(`${API_BASE}/api/check-svg`, {
+      const res = await axios.post(`${API_BASE}api/check-svg`, {
         placed_svg: placedSvg,
         expected_svg: expectedSvg,
       });
