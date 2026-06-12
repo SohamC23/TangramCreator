@@ -10,7 +10,7 @@ import presets
 from fastapi.middleware.cors import CORSMiddleware
 
 
-API_BASE_URL = "/api"
+API_BASE_URL = "api"
 
 
 app = FastAPI(title="Tangram Creator API")
